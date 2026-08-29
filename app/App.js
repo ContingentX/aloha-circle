@@ -8,8 +8,10 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import {
   SafeAreaView, ScrollView, View, Text, TextInput,
-  TouchableOpacity, StyleSheet, ActivityIndicator, Animated, Easing,
+  TouchableOpacity, ActivityIndicator, Animated, Easing,
 } from 'react-native';
+import BoardingPassCard from './BoardingPass.jsx';
+import { styles } from './styles.js';
 
 const API_BASE = 'https://vsrvqrddll.execute-api.us-east-1.amazonaws.com';
 // The web app that hosts the sign-in and Stripe-return bridge pages.
@@ -323,39 +325,18 @@ export default function App() {
         )}
         {error && <Text style={styles.error}>{error}</Text>}
 
+        {token && (
+          <BoardingPassCard
+            profile={profile}
+            onSave={async (fields) => {
+              const { profile } = await api('/profile', { method: 'POST', body: fields, token });
+              setProfile(profile);
+            }}
+          />
+        )}
         <WheelCard token={token} onAuthExpired={() => setToken(null)} />
         <MatchCard apiBase={apiBase} setApiBase={setApiBase} />
       </ScrollView>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: '#fdf6ec' },
-  scroll: { padding: 20 },
-  h1: { fontSize: 34, fontWeight: '700', color: '#073b57', marginTop: 12 },
-  accent: { color: '#ff6b57' },
-  tagline: { fontSize: 16, color: '#0b5d8a', marginBottom: 16 },
-  card: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 14 },
-  matchCard: { borderWidth: 2, borderColor: '#1c7c54' },
-  h3: { fontSize: 18, fontWeight: '600', color: '#073b57', marginBottom: 8 },
-  line: { fontSize: 15, marginVertical: 2, color: '#16303f' },
-  bold: { fontWeight: '600' },
-  input: { borderWidth: 1, borderColor: '#c6d8e2', borderRadius: 10, padding: 10, marginVertical: 6, fontSize: 15 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 10 },
-  chip: { borderWidth: 1, borderColor: '#c6d8e2', borderRadius: 999, paddingVertical: 6, paddingHorizontal: 14 },
-  chipOn: { backgroundColor: '#1c7c54', borderColor: '#1c7c54' },
-  chipText: { color: '#16303f' },
-  chipTextOn: { color: '#fff' },
-  cta: { backgroundColor: '#ff6b57', borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 8 },
-  ctaOff: { opacity: 0.5 },
-  ctaText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  hint: { color: '#5a7484', fontSize: 13 },
-  error: { color: '#b3261e', marginTop: 8 },
-  wheel: {
-    alignSelf: 'center', width: 140, height: 140, borderRadius: 70, marginVertical: 16,
-    borderWidth: 8, borderColor: '#1c7c54', backgroundColor: '#fdf6ec',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  wheelFace: { fontSize: 48 },
-});

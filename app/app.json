@@ -16,7 +16,13 @@
       "package": "net.alohalive.app"
     },
     "plugins": [
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "AlohaLive scans your boarding-pass barcode on-device to verify your trip. The image never leaves your phone."
+        }
+      ]
     ]
   }
 }
