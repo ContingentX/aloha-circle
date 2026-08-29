@@ -31,6 +31,19 @@ cd app && npm install && npx expo start
 
 Sign up as a visitor on the site — you'll get an instant match against the seeded locals/causes. The harness re-ingests CauseSignals continuously from `agentharness/src/sources.json`.
 
+## Branches & Deploys
+
+Day-to-day work happens on **`dev`** (the default branch); **`production`** is the live release branch. GitHub Actions deploys on push, assuming the `alohalive-github-deploy` IAM role via OIDC (repo variable `AWS_DEPLOY_ROLE_ARN`):
+
+| Branch | Workflow | Deploys to |
+|--------|----------|-----------|
+| `dev` | [deploy-dev.yml](.github/workflows/deploy-dev.yml) | https://dev.alohalive.net |
+| `production` | [deploy-prod.yml](.github/workflows/deploy-prod.yml) | https://alohalive.net (www redirects to apex) |
+
+Each deploy re-applies [`infra/site.yaml`](infra/site.yaml) (S3 + CloudFront + ACM + Route53 per environment) then builds `www` and syncs it to the environment's bucket with a CloudFront invalidation (`infra/deploy.sh` + `infra/deploy-web.sh`). The one-time OIDC role lives in [`infra/cicd.yaml`](infra/cicd.yaml) (stack `alohalive-cicd`). Set the repo variables `VITE_API_BASE_DEV` / `VITE_API_BASE_PROD` once the agent harness is hosted so the static site can reach the API.
+
+Release flow: PR feature → `dev` (auto-deploys dev site) → PR `dev` → `production` (auto-deploys live site).
+
 ## Qodo Code Review Evidence
 
 _Placeholder — every PR in this repo is reviewed by Qodo. PR links and findings addressed will be listed here._
