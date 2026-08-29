@@ -5,6 +5,9 @@
   "type": "module",
   "description": "The Aloha Agent: API, continuous Maui Needs Index ingest, and matcher",
   "main": "src/index.js",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node src/index.js",
     "ingest": "node src/index.js --ingest-once",

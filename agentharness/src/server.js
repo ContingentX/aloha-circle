@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { load, insert, counts } from './store.js';
-import { matchVisitor } from './matcher.js';
+import { rankMatch } from './matcher.js';
 import { ingestOnce } from './ingest.js';
 import { handleMcpRequest } from './mcp.js';
 import {
@@ -39,7 +39,12 @@ export function createServer() {
       groupType: req.body.groupType ?? null,
       desiredInvolvement: req.body.desiredInvolvement ?? null,
     });
-    const match = matchVisitor(visitor);
+    const ranked = rankMatch(visitor, {
+      locals: load('locals'),
+      causes: load('causes'),
+      endorsements: load('endorsements'),
+    });
+    const match = ranked ? insert('matches', ranked) : null;
     res.status(201).json({ visitor, match });
   });
 

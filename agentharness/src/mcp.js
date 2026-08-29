@@ -99,8 +99,12 @@ function requestHostname(req) {
   }
 }
 
+export function isLoopbackAddress(address) {
+  return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
+}
+
 export async function handleMcpRequest(req, res) {
-  if (!allowedMcpHosts().has(requestHostname(req))) {
+  if (!isLoopbackAddress(req.socket.remoteAddress) || !allowedMcpHosts().has(requestHostname(req))) {
     return res.status(403).json({ error: 'MCP host is not allowed' });
   }
 

@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { TrueForge, isEventDelta, mergeEventDelta } from '@truefoundry/trueforge-sdk';
 import { findById, insert, load, updateById } from './store.js';
+import { introductionArgumentsFromToolCall, introductionArgumentsHash } from './introductions.js';
 
 function requiredConfig(value, name) {
   if (!value) throw new Error(`${name} is required`);
@@ -93,13 +94,16 @@ async function collectTurn(stream) {
       const call = message?.type === 'model.message' ? message.toolCalls?.find((item) => item.id === ref.id) : null;
       if (!call) continue;
       const args = parseArguments(call.function.arguments);
+      const argumentsHash = call.toolInfo.name === 'request_introduction'
+        ? introductionArgumentsHash(introductionArgumentsFromToolCall(args))
+        : crypto.createHash('sha256').update(JSON.stringify(args)).digest('hex');
       pendingApprovals.push({
         threadId: pending.threadId,
         toolCallId: ref.id,
         sourceEventId: ref.sourceEventId,
         toolName: call.toolInfo.name,
         arguments: args,
-        argumentsHash: crypto.createHash('sha256').update(JSON.stringify(args)).digest('hex'),
+        argumentsHash,
       });
     }
   }
@@ -162,33 +166,70 @@ export async function respondToApproval({
   const pending = session.pendingApprovals?.find((item) => item.toolCallId === toolCallId);
   if (!pending || pending.toolName !== 'request_introduction') throw new Error('approval is not pending for this session');
 
+  const introductionArgs = introductionArgumentsFromToolCall(pending.arguments);
+  if (introductionArgs.sessionId !== session.trueforgeSessionId) {
+    throw new Error('pending approval does not belong to this TrueForge session');
+  }
+  const argumentsHash = introductionArgumentsHash(introductionArgs);
+  if (argumentsHash !== pending.argumentsHash) throw new Error('pending approval arguments changed');
+
+  // Claim synchronously before the first await. A concurrent decision in this
+  // single-process harness will no longer see this call as pending.
+  updateById('sessions', session.id, {
+    status: 'approval_in_flight',
+    pendingApprovals: session.pendingApprovals.filter((item) => item.toolCallId !== toolCallId),
+    approvalInFlight: { toolCallId, decision, argumentsHash },
+    approvedIntroduction: decision === 'allow'
+      ? {
+          toolCallId,
+          argumentsHash,
+          expiresAt: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
+        }
+      : null,
+  });
+
   const approval = { status: decision };
   if (decision === 'deny') approval.reason = reason || 'denied by user';
-  const stream = await client.sessions.createTurnStream(session.trueforgeSessionId, {
-    input: [
-      {
-        type: 'user.tool_approval',
-        threadId: pending.threadId,
-        toolCallId: pending.toolCallId,
-        approval,
+  try {
+    const stream = await client.sessions.createTurnStream(session.trueforgeSessionId, {
+      input: [
+        {
+          type: 'user.tool_approval',
+          threadId: pending.threadId,
+          toolCallId: pending.toolCallId,
+          approval,
+        },
+      ],
+    });
+    const result = await collectTurn(stream);
+    updateById('sessions', session.id, {
+      status: result.terminalState?.status ?? 'unknown',
+      lastTurnId: result.turnId,
+      lastSequenceNumber: result.lastSequenceNumber,
+      pendingApprovals: result.pendingApprovals,
+      lastTrace: result.trace,
+      approvalInFlight: null,
+      approvedIntroduction: null,
+      lastApproval: {
+        decision,
+        toolCallId,
+        argumentsHash,
+        decidedAt: new Date().toISOString(),
       },
-    ],
-  });
-  const result = await collectTurn(stream);
-  updateById('sessions', session.id, {
-    status: result.terminalState?.status ?? 'unknown',
-    lastTurnId: result.turnId,
-    lastSequenceNumber: result.lastSequenceNumber,
-    pendingApprovals: result.pendingApprovals,
-    lastTrace: result.trace,
-    lastApproval: {
-      decision,
-      toolCallId,
-      argumentsHash: pending.argumentsHash,
-      decidedAt: new Date().toISOString(),
-    },
-  });
-  return result;
+    });
+    return result;
+  } catch (error) {
+    const current = getAlohaSession(sessionId);
+    if (current.approvalInFlight?.toolCallId === toolCallId) {
+      updateById('sessions', session.id, {
+        status: 'approval_failed',
+        pendingApprovals: [pending, ...(current.pendingApprovals ?? [])],
+        approvalInFlight: null,
+        approvedIntroduction: null,
+      });
+    }
+    throw error;
+  }
 }
 
 export async function listTrueForgeTurns({ sessionId, client = createTrueForgeClient() } = {}) {

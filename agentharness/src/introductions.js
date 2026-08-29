@@ -1,11 +1,51 @@
 import crypto from 'node:crypto';
-import { findById, insert, load } from './store.js';
+import { findById, insert, load, updateById } from './store.js';
 import { rankMatch } from './matcher.js';
 
 function fail(message) {
   const error = new Error(message);
   error.code = 'INVALID_INTRODUCTION';
   throw error;
+}
+
+export function normalizeIntroductionArguments({
+  sessionId,
+  visitorId,
+  localId,
+  causeId,
+  explanation,
+}) {
+  return { sessionId, visitorId, localId, causeId, explanation };
+}
+
+export function introductionArgumentsFromToolCall(args = {}) {
+  return normalizeIntroductionArguments({
+    sessionId: args.session_id,
+    visitorId: args.visitor_id,
+    localId: args.local_id,
+    causeId: args.cause_id,
+    explanation: args.explanation,
+  });
+}
+
+export function introductionArgumentsHash(args) {
+  return crypto
+    .createHash('sha256')
+    .update(JSON.stringify(normalizeIntroductionArguments(args)))
+    .digest('hex');
+}
+
+function consumeIntroductionApproval(args) {
+  const session = load('sessions').find((item) => item.trueforgeSessionId === args.sessionId);
+  const approval = session?.approvedIntroduction;
+  if (!approval || approval.argumentsHash !== introductionArgumentsHash(args)) {
+    fail('no matching human-approved introduction is pending');
+  }
+  if (Date.parse(approval.expiresAt) <= Date.now()) {
+    updateById('sessions', session.id, { approvedIntroduction: null });
+    fail('the human-approved introduction has expired');
+  }
+  updateById('sessions', session.id, { approvedIntroduction: null });
 }
 
 export function getMatchContext({ sessionId, visitorId }) {
@@ -40,7 +80,8 @@ export function getMatchContext({ sessionId, visitorId }) {
 }
 
 export function requestIntroduction({ sessionId, visitorId, localId, causeId, explanation }) {
-  const context = getMatchContext({ sessionId, visitorId });
+  const args = normalizeIntroductionArguments({ sessionId, visitorId, localId, causeId, explanation });
+  const context = getMatchContext(args);
   if (context.oracle.localId !== localId || context.oracle.causeId !== causeId) {
     fail('proposal does not match the deterministic scoring oracle');
   }
@@ -51,6 +92,10 @@ export function requestIntroduction({ sessionId, visitorId, localId, causeId, ex
     .digest('hex');
   const existing = load('introductions').find((item) => item.idempotencyKey === idempotencyKey);
   if (existing) return { introduction: existing, created: false };
+
+  // TrueForge stages this one-use capability only after the human allows the
+  // exact pending tool call. Direct MCP clients therefore cannot create the effect.
+  consumeIntroductionApproval(args);
 
   const introduction = insert('introductions', {
     idempotencyKey,

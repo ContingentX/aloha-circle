@@ -13,13 +13,44 @@ const HARNESS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..'
 const testDataDir = mkdtempSync(path.join(os.tmpdir(), 'alohalive-trueforge-contract-'));
 process.env.ALOHALIVE_DATA_DIR = testDataDir;
 
-const [{ createServer }, store, { ingestOnce }, introductions, trueforge] = await Promise.all([
+const [{ createServer }, store, { ingestOnce }, introductions, trueforge, matcher, mcp] = await Promise.all([
   import('../src/server.js'),
   import('../src/store.js'),
   import('../src/ingest.js'),
   import('../src/introductions.js'),
   import('../src/trueforge.js'),
+  import('../src/matcher.js'),
+  import('../src/mcp.js'),
 ]);
+
+function completedStream(turnId) {
+  const entries = [
+    {
+      id: '1',
+      data: {
+        id: `${turnId}-created`,
+        type: 'turn.created',
+        turnId,
+        threadId: null,
+        state: { status: 'running' },
+      },
+    },
+    {
+      id: '2',
+      data: {
+        id: `${turnId}-done`,
+        type: 'turn.done',
+        threadId: null,
+        state: { status: 'done', requiredActions: [], output: null },
+      },
+    },
+  ];
+  return {
+    async *withMetadata() {
+      yield* entries;
+    },
+  };
+}
 
 test('MCP tools and TrueForge manifest enforce the vertical-slice contract', async (t) => {
   let httpServer;
@@ -53,6 +84,18 @@ test('MCP tools and TrueForge manifest enforce the vertical-slice contract', asy
   assert.ok(context.oracle.localId);
   assert.ok(context.oracle.causeId);
   assert.equal(context.oracle.blocks.length, 3);
+
+  assert.throws(
+    () => matcher.rankMatch(visitor, {
+      locals: context.locals,
+      causes: [{ ...context.causes[0], urgency: 0 }],
+      endorsements: context.endorsements,
+    }),
+    /cause.urgency must be an integer from 1 through 5/,
+  );
+  assert.equal(mcp.isLoopbackAddress('127.0.0.1'), true);
+  assert.equal(mcp.isLoopbackAddress('::ffff:127.0.0.1'), true);
+  assert.equal(mcp.isLoopbackAddress('192.168.1.50'), false);
 
   assert.throws(
     () => introductions.requestIntroduction({
@@ -100,7 +143,43 @@ test('MCP tools and TrueForge manifest enforce the vertical-slice contract', asy
       explanation: context.oracle.why,
     },
   });
-  assert.equal(JSON.parse(first.content[0].text).created, true);
+  assert.equal(first.isError, true);
+  assert.match(first.content[0].text, /no matching human-approved introduction is pending/);
+  assert.equal(store.load('introductions').length, 0);
+
+  const toolArguments = {
+    session_id: trueforgeSessionId,
+    visitor_id: visitor.id,
+    local_id: context.oracle.localId,
+    cause_id: context.oracle.causeId,
+    explanation: context.oracle.why,
+  };
+  const normalizedArguments = introductions.introductionArgumentsFromToolCall(toolArguments);
+  const pending = {
+    threadId: 'main',
+    toolCallId: 'call-approved-1',
+    sourceEventId: 'model-message-1',
+    toolName: 'request_introduction',
+    arguments: toolArguments,
+    argumentsHash: introductions.introductionArgumentsHash(normalizedArguments),
+  };
+  store.updateById('sessions', appSession.id, { pendingApprovals: [pending] });
+  const approvalResult = await trueforge.respondToApproval({
+    sessionId: appSession.id,
+    toolCallId: pending.toolCallId,
+    decision: 'allow',
+    client: {
+      sessions: {
+        createTurnStream: async () => {
+          const effect = introductions.requestIntroduction(normalizedArguments);
+          assert.equal(effect.created, true);
+          return completedStream('turn-approved-1');
+        },
+      },
+    },
+  });
+  assert.equal(approvalResult.terminalState.status, 'done');
+  assert.equal(store.load('introductions').length, 1);
 
   const replay = await mcpClient.callTool({
     name: 'request_introduction',
@@ -114,4 +193,35 @@ test('MCP tools and TrueForge manifest enforce the vertical-slice contract', asy
   });
   assert.equal(JSON.parse(replay.content[0].text).created, false);
   assert.equal(store.load('introductions').length, 1);
+
+  const racingPending = { ...pending, toolCallId: 'call-race-1' };
+  store.updateById('sessions', appSession.id, { pendingApprovals: [racingPending] });
+  let releaseProvider;
+  const providerGate = new Promise((resolve) => {
+    releaseProvider = resolve;
+  });
+  const firstDecision = trueforge.respondToApproval({
+    sessionId: appSession.id,
+    toolCallId: racingPending.toolCallId,
+    decision: 'allow',
+    client: {
+      sessions: {
+        createTurnStream: async () => {
+          await providerGate;
+          return completedStream('turn-race-1');
+        },
+      },
+    },
+  });
+  await assert.rejects(
+    trueforge.respondToApproval({
+      sessionId: appSession.id,
+      toolCallId: racingPending.toolCallId,
+      decision: 'deny',
+      client: { sessions: { createTurnStream: async () => completedStream('turn-race-2') } },
+    }),
+    /approval is not pending for this session/,
+  );
+  releaseProvider();
+  await firstDecision;
 });

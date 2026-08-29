@@ -1,7 +1,5 @@
 // Deterministic matcher: visitor × local × cause → match with a human "why".
-// This is the seam the TrueForge agent (Local Scout / Cause Scout / Experience
-// Scout subagents) replaces in phase 2 — same inputs, same Match shape out.
-import { load, insert } from './store.js';
+// All state is passed explicitly so the scorer stays pure and independently testable.
 
 function overlap(a = [], b = []) {
   const setB = new Set(b.map((x) => x.toLowerCase()));
@@ -15,7 +13,28 @@ function endorsementScore(nonprofitName, endorsements) {
     .reduce((sum, e) => sum + (verdictWeight[e.verdict] ?? 0), 0);
 }
 
+function assertCauseSignal(cause) {
+  if (!cause || typeof cause !== 'object') throw new TypeError('cause must be an object');
+  for (const field of ['id', 'title', 'summary', 'nonprofit']) {
+    if (typeof cause[field] !== 'string' || cause[field].trim() === '') {
+      throw new TypeError(`cause.${field} must be a non-empty string`);
+    }
+  }
+  if (!Array.isArray(cause.causeTags) || cause.causeTags.some((tag) => typeof tag !== 'string' || tag === '')) {
+    throw new TypeError('cause.causeTags must be an array of non-empty strings');
+  }
+  if (!Number.isInteger(cause.urgency) || cause.urgency < 1 || cause.urgency > 5) {
+    throw new TypeError('cause.urgency must be an integer from 1 through 5');
+  }
+}
+
 export function rankMatch(visitor, { locals, causes, endorsements }) {
+  if (!visitor || !Array.isArray(visitor.interests)) throw new TypeError('visitor.interests must be an array');
+  if (!Array.isArray(locals) || !Array.isArray(causes) || !Array.isArray(endorsements)) {
+    throw new TypeError('locals, causes, and endorsements must be arrays');
+  }
+  causes.forEach(assertCauseSignal);
+
   let best = null;
   for (const local of locals) {
     const sharedInterests = overlap(visitor.interests, local.interests);
@@ -73,13 +92,4 @@ export function rankMatch(visitor, { locals, causes, endorsements }) {
       { type: 'action', text: best.cause.action ?? `Ask ${best.local.name} how to help with "${best.cause.title}".` },
     ],
   };
-}
-
-export function matchVisitor(visitor) {
-  const match = rankMatch(visitor, {
-    locals: load('locals'),
-    causes: load('causes'),
-    endorsements: load('endorsements'),
-  });
-  return match ? insert('matches', match) : null;
 }
