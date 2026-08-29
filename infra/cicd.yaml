@@ -1,0 +1,113 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: AlohaLive CI/CD - GitHub OIDC deploy role (provider already exists in account)
+
+Parameters:
+  GitHubOrg:
+    Type: String
+    Default: oceanseth
+  GitHubRepo:
+    Type: String
+    Default: alohalive
+  HostedZoneId:
+    Type: String
+    Default: Z07263701EFGE2972ASGC
+  # This repo was created after GitHub switched new repos to immutable ID-embedded
+  # OIDC subjects, so tokens carry repo:<org>@<org-id>/<repo>@<repo-id>:... — see
+  # GET /repos/{org}/{repo}/actions/oidc/customization/sub.
+  SubClaimPrefix:
+    Type: String
+    Default: "repo:oceanseth@63625290/alohalive@1350786374"
+  CreateOidcProvider:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "false"
+    Description: Create the GitHub OIDC provider, or reference the existing one.
+
+Conditions:
+  ShouldCreateOidc: !Equals [!Ref CreateOidcProvider, "true"]
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: ShouldCreateOidc
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+        - 1c58a3a8518e8759bf075b76b750d4f2df264fcd
+
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: alohalive-github-deploy
+      Description: Assumed by GitHub Actions (dev/production) to deploy AlohaLive.
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - ShouldCreateOidc
+                - !Ref GitHubOidcProvider
+                - !Sub "arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com"
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+              StringLike:
+                "token.actions.githubusercontent.com:sub":
+                  - !Sub "repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/dev"
+                  - !Sub "repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/production"
+                  - !Sub "repo:${GitHubOrg}/${GitHubRepo}:environment:production"
+                  - !Sub "${SubClaimPrefix}:ref:refs/heads/dev"
+                  - !Sub "${SubClaimPrefix}:ref:refs/heads/production"
+                  - !Sub "${SubClaimPrefix}:environment:production"
+      Policies:
+        - PolicyName: alohalive-deploy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: CloudFormation
+                Effect: Allow
+                Action: cloudformation:*
+                Resource: "*"
+              - Sid: Edge
+                Effect: Allow
+                Action:
+                  - cloudfront:*
+                  - acm:*
+                Resource: "*"
+              - Sid: Route53Zone
+                Effect: Allow
+                Action:
+                  - route53:GetChange
+                  - route53:GetHostedZone
+                  - route53:ListResourceRecordSets
+                  - route53:ChangeResourceRecordSets
+                Resource:
+                  - !Sub "arn:aws:route53:::hostedzone/${HostedZoneId}"
+                  - arn:aws:route53:::change/*
+              - Sid: Route53List
+                Effect: Allow
+                Action: route53:ListHostedZones
+                Resource: "*"
+              - Sid: SiteBuckets
+                Effect: Allow
+                Action: s3:*
+                Resource:
+                  - arn:aws:s3:::alohalive-*
+                  - arn:aws:s3:::alohalive-*/*
+              - Sid: SsmSecretRead
+                Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                  - ssm:GetParametersByPath
+                Resource: arn:aws:ssm:us-east-1:*:parameter/alohalive/*
+
+Outputs:
+  DeployRoleArn:
+    Description: Set this as the GitHub Actions repo variable AWS_DEPLOY_ROLE_ARN.
+    Value: !GetAtt DeployRole.Arn
