@@ -56,14 +56,25 @@ input, select {
 .badge-ok { background: #dcefe4; color: var(--palm); }
 
 .wheel-card { border: 2px solid var(--coral); }
-.wheel {
-  width: 140px; height: 140px; border-radius: 50%; margin: 12px auto;
-  border: 6px solid var(--ocean-deep);
-  background: conic-gradient(var(--coral) 0 60deg, var(--sand) 60deg 120deg, var(--palm) 120deg 180deg,
-    var(--ocean) 180deg 240deg, #ffd166 240deg 300deg, var(--ocean-deep) 300deg 360deg);
+.wheel-svg { display: block; width: 210px; height: 210px; margin: 12px auto; }
+.wheel-num {
+  fill: white; font-size: 14px; font-weight: 800;
+  text-anchor: middle; dominant-baseline: central;
+  paint-order: stroke; stroke: rgba(7, 59, 87, 0.4); stroke-width: 3px;
 }
-.wheel-spin { animation: wheel-spin 2.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
-@keyframes wheel-spin { to { transform: rotate(1470deg); } }
+.wheel-legend { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 6px; }
+.legend-row {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  background: white; border: 1px solid #c6d8e2; border-radius: 10px;
+  padding: 8px 10px; cursor: pointer; font-size: 0.9rem; color: var(--ink);
+}
+.legend-on { border-color: var(--coral); box-shadow: 0 0 0 2px rgba(255, 107, 87, 0.25); }
+.legend-num {
+  flex: none; width: 26px; height: 26px; border-radius: 50%; color: white;
+  font-weight: 700; font-size: 0.85rem; display: grid; place-items: center;
+}
+.legend-text { display: flex; flex-direction: column; min-width: 0; }
+.legend-meta { color: var(--ocean); font-size: 0.78rem; }
 .field-row { display: flex; gap: 8px; }
 .field-row input { min-width: 0; }
 
