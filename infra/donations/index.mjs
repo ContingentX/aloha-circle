@@ -291,14 +291,20 @@ async function donate(body, origin) {
   const amount = Math.floor(Number(body.amountUsd));
   if (!(amount >= exp.minDonation)) return resp(400, { error: `minimum donation is $${exp.minDonation}` }, origin);
   const site = ALLOWED_ORIGINS.includes(origin) ? origin : 'https://alohalive.net';
+  // Native app: bounce Stripe's redirect through /appreturn back into the app's
+  // deep link. Only app schemes are accepted, so this can't become an open redirect.
+  const appReturn = String(body.appReturn ?? '');
+  const app = /^(exp|exps|alohalive):\/\/\S+$/.test(appReturn) ? encodeURIComponent(appReturn) : null;
   const session = await stripe('/checkout/sessions', {
     mode: 'payment',
     'line_items[0][quantity]': '1',
     'line_items[0][price_data][currency]': 'usd',
     'line_items[0][price_data][unit_amount]': String(amount * 100),
     'line_items[0][price_data][product_data][name]': `AlohaLive donation — spin for: ${exp.title}`,
-    success_url: `${site}/?spin={CHECKOUT_SESSION_ID}`,
-    cancel_url: site,
+    success_url: app
+      ? `${site}/appreturn?next=${app}&spin={CHECKOUT_SESSION_ID}`
+      : `${site}/?spin={CHECKOUT_SESSION_ID}`,
+    cancel_url: app ? `${site}/appreturn?next=${app}` : site,
     'metadata[experienceId]': experienceId,
   });
   return resp(200, { url: session.url }, origin);

@@ -2,13 +2,21 @@
   "expo": {
     "name": "AlohaLive",
     "slug": "alohalive",
+    "scheme": "alohalive",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
       "backgroundColor": "#0b5d8a"
     },
-    "ios": { "supportsTablet": true },
-    "android": { "package": "net.alohalive.app" }
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "net.alohalive.app"
+    },
+    "plugins": [
+      "expo-asset"
+    ]
   }
 }
