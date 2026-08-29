@@ -1,0 +1,20 @@
+[
+  {
+    "title": "Saturday reef cleanup at Kahekili Beach",
+    "nonprofit": "Maui Reef Guardians",
+    "causeTags": ["reef", "ocean", "diving"],
+    "urgency": 4,
+    "summary": "Reef Guardians need 20 volunteers this Saturday to remove debris after last week's swell.",
+    "action": "Join Saturday's reef cleanup, 8 AM at Kahekili Beach.",
+    "url": "https://example.org/reef-guardians/cleanup"
+  },
+  {
+    "title": "Produce sorting shifts at the Food Hub",
+    "nonprofit": "Maui Food Hub",
+    "causeTags": ["food-security", "community", "farming"],
+    "urgency": 3,
+    "summary": "The Food Hub is short on hands to sort this week's farm surplus for Upcountry families.",
+    "action": "Take a 2-hour sorting shift in Kahului, weekday mornings.",
+    "url": "https://example.org/food-hub/shifts"
+  }
+]

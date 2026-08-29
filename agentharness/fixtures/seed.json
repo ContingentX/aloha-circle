@@ -1,0 +1,18 @@
+{
+  "locals": [
+    { "name": "Keoni", "town": "Lahaina", "interests": ["diving", "ocean", "fishing"], "causes": ["reef", "ocean"], "verified": true },
+    { "name": "Leilani", "town": "Paia", "interests": ["photography", "hiking", "ocean"], "causes": ["wildlife", "trails"], "verified": true },
+    { "name": "Makoa", "town": "Kahului", "interests": ["farming", "cooking", "community"], "causes": ["food-security", "aina"], "verified": true }
+  ],
+  "nonprofits": [
+    { "name": "Maui Reef Guardians", "causeTags": ["reef", "ocean"], "needs": ["cleanup volunteers", "donations"], "website": "https://example.org/reef-guardians" },
+    { "name": "Aloha Trail Keepers", "causeTags": ["trails", "wildlife", "hiking"], "needs": ["trail crew"], "website": "https://example.org/trail-keepers" },
+    { "name": "Maui Food Hub", "causeTags": ["food-security", "aina", "farming"], "needs": ["produce sorters", "drivers"], "website": "https://example.org/food-hub" }
+  ],
+  "endorsements": [
+    { "local": "Keoni", "nonprofit": "Maui Reef Guardians", "verdict": "helping_now" },
+    { "local": "Leilani", "nonprofit": "Maui Reef Guardians", "verdict": "helping_now" },
+    { "local": "Makoa", "nonprofit": "Maui Food Hub", "verdict": "helping_now" },
+    { "local": "Leilani", "nonprofit": "Aloha Trail Keepers", "verdict": "generally_helping" }
+  ]
+}

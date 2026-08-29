@@ -1,0 +1,17 @@
+{
+  "name": "alohalive-agentharness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The Aloha Agent: API, continuous Maui Needs Index ingest, and matcher",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "ingest": "node src/index.js --ingest-once",
+    "test": "node test/smoke.test.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.0"
+  }
+}
