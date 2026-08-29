@@ -1,0 +1,12 @@
+{
+  "firestore": {
+    "database": "alohalive",
+    "rules": "infra/firestore.alohalive.rules"
+  },
+  "storage": [
+    {
+      "target": "alohalive-verify",
+      "rules": "infra/storage.alohalive.rules"
+    }
+  ]
+}

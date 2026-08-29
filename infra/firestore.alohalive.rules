@@ -1,0 +1,46 @@
+rules_version = '2';
+
+// Rules for the named Firestore database "alohalive" in project contingentx-b0eab.
+// Deploy: see infra/README-firebase.md
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // A user may only mark themselves "verified" when a domainProofs doc for
+    // their claimed domain names their uid (nonprofit path). Locals can only
+    // reach "pending" on their own — review flips them to verified via the
+    // Admin SDK, which bypasses rules.
+    function verifiedStatusAllowed(uid) {
+      return request.resource.data.get(['verification', 'status'], 'unverified') != 'verified'
+        || (
+          request.resource.data.get('role', '') == 'nonprofit'
+            && get(/databases/$(database)/documents/domainProofs/$(request.resource.data.domain)).data.claimedBy == uid
+        );
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && request.auth.uid == uid && verifiedStatusAllowed(uid);
+    }
+
+    // Writable only by a session whose *verified* email is on the claimed
+    // domain — this is the domain-ownership proof.
+    match /domainProofs/{domain} {
+      allow read: if signedIn();
+      allow create, update: if signedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.split('@')[1].lower() == domain
+        && request.resource.data.claimedBy is string;
+    }
+
+    // Nonprofit-donated experiences for the donation wheel (per-day/per-month
+    // caps, min donation). Public read so the wheel can render pre-signin.
+    match /experiences/{id} {
+      allow read: if true;
+      allow create: if signedIn() && request.resource.data.npoUid == request.auth.uid;
+      allow update, delete: if signedIn() && resource.data.npoUid == request.auth.uid;
+    }
+  }
+}

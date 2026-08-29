@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
+import { AuthProvider } from './auth.jsx';
+import { AuthButton, DomainProofGate, LocalVerifyCard, NpoVerifyCard } from './Verify.jsx';
 
 const INTEREST_OPTIONS = [
   'ocean', 'diving', 'hiking', 'wildlife', 'photography', 'farming',
@@ -84,7 +86,9 @@ function LocalTab() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    api.get('/api/nonprofits').then(setNonprofits).catch((e) => setError(e.message));
+    api.get('/api/nonprofits')
+      .then((list) => setNonprofits(Array.isArray(list) ? list : []))
+      .catch((e) => setError(e.message));
   }, []);
 
   const toggle = (tag) =>
@@ -105,7 +109,8 @@ function LocalTab() {
     setError(null);
     try {
       await api.post('/api/endorsements', { local: name || 'anonymous local', nonprofit: nonprofit.name, verdict });
-      setNonprofits(await api.get('/api/nonprofits'));
+      const list = await api.get('/api/nonprofits');
+      setNonprofits(Array.isArray(list) ? list : []);
     } catch (err) {
       setError(err.message);
     }
@@ -113,6 +118,7 @@ function LocalTab() {
 
   return (
     <div>
+      <LocalVerifyCard />
       {!done ? (
         <form className="card" onSubmit={submit}>
           <h3>I live here 🤙</h3>
@@ -168,9 +174,18 @@ function NonprofitTab() {
     }
   };
 
-  if (done) return <div className="card"><h3>Mahalo! {form.name} is listed — locals can now endorse you.</h3></div>;
+  if (done) {
+    return (
+      <div>
+        <NpoVerifyCard />
+        <div className="card"><h3>Mahalo! {form.name} is listed — locals can now endorse you.</h3></div>
+      </div>
+    );
+  }
 
   return (
+    <div>
+    <NpoVerifyCard />
     <form className="card" onSubmit={submit}>
       <h3>List your cause</h3>
       <input placeholder="Organization name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
@@ -179,6 +194,7 @@ function NonprofitTab() {
       <button className="cta">List nonprofit</button>
       {error && <p className="error">{error}</p>}
     </form>
+    </div>
   );
 }
 
@@ -187,7 +203,9 @@ function NeedsTab() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    api.get('/api/causes').then(setCauses).catch((e) => setError(e.message));
+    api.get('/api/causes')
+      .then((list) => setCauses(Array.isArray(list) ? list : []))
+      .catch((e) => setError(e.message));
   }, []);
 
   return (
@@ -219,9 +237,14 @@ const TABS = [
 export default function App() {
   const [tab, setTab] = useState('visitor');
   return (
+    <AuthProvider>
+    <DomainProofGate>
     <div className="page">
       <header>
-        <h1>Aloha<span className="accent">Live</span></h1>
+        <div className="header-row">
+          <h1>Aloha<span className="accent">Live</span></h1>
+          <AuthButton />
+        </div>
         <p className="tagline">Don't just visit Maui. <strong>Meet Maui.</strong></p>
       </header>
       <nav>
@@ -236,5 +259,7 @@ export default function App() {
         <p>The Aloha Circle · Kahului Airport (OGG) · <a href="https://alohalive.net">alohalive.net</a></p>
       </footer>
     </div>
+    </DomainProofGate>
+    </AuthProvider>
   );
 }

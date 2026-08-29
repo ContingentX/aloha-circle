@@ -1,0 +1,14 @@
+{
+  "projects": {
+    "default": "contingentx-b0eab"
+  },
+  "targets": {
+    "contingentx-b0eab": {
+      "storage": {
+        "alohalive-verify": [
+          "contingentx-alohalive"
+        ]
+      }
+    }
+  }
+}

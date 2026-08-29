@@ -36,10 +36,24 @@ nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
 }
 .card h3 { margin-top: 0; color: var(--ocean-deep); }
 
-input {
+input, select {
   width: 100%; padding: 10px 12px; margin: 6px 0; border-radius: 10px;
-  border: 1px solid #c6d8e2; font-size: 1rem;
+  border: 1px solid #c6d8e2; font-size: 1rem; background: white; color: var(--ink);
 }
+
+.header-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.auth-box { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+.avatar { width: 28px; height: 28px; border-radius: 50%; }
+.google-btn {
+  border: 1px solid var(--ocean); background: white; color: var(--ocean);
+  border-radius: 10px; padding: 8px 14px; cursor: pointer; font-size: 0.9rem;
+}
+.link-btn { border: none; background: none; color: var(--ocean); cursor: pointer; font-size: 0.85rem; text-decoration: underline; }
+.badge {
+  border-radius: 999px; padding: 2px 10px; font-size: 0.78rem;
+  background: #fff3cd; color: #7a5c00;
+}
+.badge-ok { background: #dcefe4; color: var(--palm); }
 
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .chip {
