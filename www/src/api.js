@@ -4,8 +4,9 @@ const BASE = import.meta.env.VITE_API_BASE ?? '';
 
 async function request(path, options) {
   const res = await fetch(`${BASE}${path}`, options);
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
+  const body = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(body?.error ?? `${res.status} ${res.statusText}`);
+  if (body === null) throw new Error('The AlohaLive API is not reachable right now.');
   return body;
 }
 
