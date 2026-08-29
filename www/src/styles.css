@@ -166,3 +166,21 @@ footer a { color: var(--ocean); }
   background: rgba(255, 255, 255, 0.9); color: var(--ink); font-size: 0.95rem;
 }
 .modal-cta { display: inline-block; text-decoration: none; text-align: center; }
+
+/* ── Aloha Circle (OGG baggage-claim experience) ─────────────────────── */
+.aloha-circle { margin-bottom: 20px; }
+.circle-row {
+  display: flex; gap: 20px; align-items: center;
+  background: #fff; border-radius: 16px; padding: 20px;
+  box-shadow: 0 2px 12px rgba(7, 59, 87, 0.08);
+}
+.circle-copy h2 { margin: 0 0 10px; color: var(--ocean-deep); font-size: 1.35rem; line-height: 1.25; }
+.circle-copy p { margin: 0 0 10px; }
+.circle-video {
+  flex: 0 0 46%; max-width: 46%; border-radius: 12px; background: #000;
+  aspect-ratio: 16 / 9; object-fit: cover;
+}
+@media (max-width: 720px) {
+  .circle-row { flex-direction: column; }
+  .circle-video { flex: none; max-width: 100%; width: 100%; }
+}
