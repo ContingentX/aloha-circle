@@ -26,12 +26,12 @@ export const FEATURED_NONPROFITS = [
       'Born of the Grube family’s farming heritage and love for Hawaiʻi, the Hua Momona Foundation has proudly served over 100,000 hot meals to those impacted by the August 8, 2023 Lāhainā fires — and hosts plated farm dinners by celebrity chef Zack Laidlaw.',
     causeTags: ['food-security', 'farming', 'wildfire-recovery'],
     website: 'https://www.huamomonafarms.com/',
-    experience: 'Plated dinner for your group of up to 40 by celebrity chef Zack Laidlaw',
+    experience: '2-person plated dinner and meet & greet with celebrity chef Zack Laidlaw',
     emoji: '🥬',
     grad: ['#7cb342', '#1c7c54'],
     image: 'https://buzz.masky.ai/media/788ab71cc91c09799d25f468f5a59f65aa7c4fc21ed3e7d7fdc359c08ae0682d.png',
     // Founder avatar explainer (Masky render of Gary Grube, hosted on buzz media)
-    video: 'https://buzz.masky.ai/media/a5d3970b0fab0a3cd837734f23917b4471fb8aac42628864b6d191eb755122c7.mp4',
+    video: 'https://buzz.masky.ai/media/382ae5074f4545bd6c84a3cc8f90a4b44e8c781c672c5c2ae27c4106f9538273.mp4',
   },
   {
     id: 'maui-humane',

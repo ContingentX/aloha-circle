@@ -21,7 +21,7 @@
       "needs": ["meal-program donations", "farm volunteers", "dinner bookings"],
       "website": "https://www.huamomonafarms.com/",
       "experiences": [
-        { "title": "Plated dinner for up to 40 guests by celebrity chef Zack Laidlaw", "value": 5000, "minDonation": 100 }
+        { "title": "2-person plated dinner and meet & greet with celebrity chef Zack Laidlaw", "value": 500, "minDonation": 50 }
       ]
     },
     {
