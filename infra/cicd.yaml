@@ -11,6 +11,12 @@ Parameters:
   HostedZoneId:
     Type: String
     Default: Z07263701EFGE2972ASGC
+  # This repo was created after GitHub switched new repos to immutable ID-embedded
+  # OIDC subjects, so tokens carry repo:<org>@<org-id>/<repo>@<repo-id>:... — see
+  # GET /repos/{org}/{repo}/actions/oidc/customization/sub.
+  SubClaimPrefix:
+    Type: String
+    Default: "repo:oceanseth@63625290/alohalive@1350786374"
   CreateOidcProvider:
     Type: String
     AllowedValues: ["true", "false"]
@@ -55,6 +61,9 @@ Resources:
                   - !Sub "repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/dev"
                   - !Sub "repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/production"
                   - !Sub "repo:${GitHubOrg}/${GitHubRepo}:environment:production"
+                  - !Sub "${SubClaimPrefix}:ref:refs/heads/dev"
+                  - !Sub "${SubClaimPrefix}:ref:refs/heads/production"
+                  - !Sub "${SubClaimPrefix}:environment:production"
       Policies:
         - PolicyName: alohalive-deploy
           PolicyDocument:
