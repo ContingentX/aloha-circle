@@ -4,6 +4,7 @@ import { AuthProvider } from './auth.jsx';
 import { AuthButton, LocalVerifyCard, NpoVerifyCard } from './Verify.jsx';
 import { DonationWheel, ExperienceManager } from './Wheel.jsx';
 import { LiveStrip, CauseScroller } from './Causes.jsx';
+import { AlohaCircle } from './AlohaCircle.jsx';
 
 const INTEREST_OPTIONS = [
   'ocean', 'diving', 'hiking', 'wildlife', 'photography', 'farming',
@@ -264,6 +265,7 @@ export default function App() {
         <LiveStrip />
       </header>
       <CauseScroller />
+      <AlohaCircle />
       <nav>
         {TABS.map((t) => (
           <button key={t.id} className={tab === t.id ? 'tab tab-on' : 'tab'} onClick={() => setTab(t.id)}>
