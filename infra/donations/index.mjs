@@ -97,6 +97,8 @@ const publicProfile = (item) =>
   item && {
     name: item.name, email: item.email, photoURL: item.photoURL,
     role: item.role, airport: item.airport, orgName: item.orgName, domain: item.domain,
+    originAirport: item.originAirport, arrivalDate: item.arrivalDate,
+    travelerVerified: item.travelerVerified === true, language: item.language,
     verification: item.ver_status ? { status: item.ver_status, method: item.ver_method, proofEmail: item.ver_proofEmail } : null,
   };
 
@@ -117,11 +119,16 @@ async function me(user, origin) {
   return resp(200, { profile: publicProfile(await getProfile(user.uid)) }, origin);
 }
 
-const PROFILE_FIELDS = ['name', 'role', 'airport', 'town', 'interests', 'groupType'];
+const PROFILE_FIELDS = ['name', 'role', 'airport', 'town', 'interests', 'groupType',
+  'originAirport', 'arrivalDate', 'travelerVerified', 'language'];
 async function saveProfile(user, body, origin) {
   const sets = { email: user.email, photoURL: body.photoURL ?? undefined };
   for (const f of PROFILE_FIELDS) if (body[f] !== undefined) sets[f] = body[f];
   if (sets.role && !['traveler', 'local', 'nonprofit'].includes(sets.role)) return resp(400, { error: 'bad role' }, origin);
+  if (sets.originAirport !== undefined && !/^[A-Z]{3}$/.test(sets.originAirport)) return resp(400, { error: 'bad airport' }, origin);
+  if (sets.arrivalDate !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(sets.arrivalDate)) return resp(400, { error: 'bad date' }, origin);
+  if (sets.travelerVerified !== undefined) sets.travelerVerified = sets.travelerVerified === true;
+  if (sets.language !== undefined && !/^[a-z]{2}$/.test(sets.language)) return resp(400, { error: 'bad language' }, origin);
   const names = {}, values = {}, parts = [];
   Object.entries(sets).forEach(([k, v], i) => {
     if (v === undefined) return;
