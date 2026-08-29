@@ -1,0 +1,7 @@
+[
+  {
+    "headline": "This source changed its HTML structure",
+    "tags": ["demo"],
+    "note": "Fields renamed (title->headline, causeTags->tags, no urgency/summary) to demo needs_repair detection — the Bright Data auto-repair hook."
+  }
+]

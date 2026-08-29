@@ -1,0 +1,37 @@
+{
+  "note": "Version-controlled scraper settings for the Maui Needs Index (see CLAUDE.md). Bright Data Scraper Studio configs replace the fixture parsers in phase 2; the schema.required contract and needs_repair flagging stay the same.",
+  "sources": [
+    {
+      "id": "maui-nonprofit-board",
+      "name": "Maui nonprofit volunteer board (fixture)",
+      "url": "fixtures/causes.maui-nonprofit-board.json",
+      "enabled": true,
+      "parser": "fixture",
+      "schema": { "required": ["title", "causeTags", "urgency", "summary"] }
+    },
+    {
+      "id": "maui-news-events",
+      "name": "Maui community news & events (fixture)",
+      "url": "fixtures/causes.maui-news-events.json",
+      "enabled": true,
+      "parser": "fixture",
+      "schema": { "required": ["title", "causeTags", "urgency", "summary"] }
+    },
+    {
+      "id": "broken-source-demo",
+      "name": "Deliberately broken source (auto-repair demo)",
+      "url": "fixtures/causes.broken.json",
+      "enabled": true,
+      "parser": "fixture",
+      "schema": { "required": ["title", "causeTags", "urgency", "summary"] }
+    },
+    {
+      "id": "brightdata-live-example",
+      "name": "Live web source via Bright Data (phase 2)",
+      "url": "https://example.org/maui-causes",
+      "enabled": false,
+      "parser": "brightdata",
+      "schema": { "required": ["title", "causeTags", "urgency", "summary"] }
+    }
+  ]
+}

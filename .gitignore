@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.expo/
+.env
+*.local
+agentharness/data/*.json
+!agentharness/data/.gitkeep
+.DS_Store
