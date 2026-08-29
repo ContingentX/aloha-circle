@@ -5,14 +5,88 @@
     { "name": "Makoa", "town": "Kahului", "interests": ["farming", "cooking", "community"], "causes": ["food-security", "aina"], "verified": true }
   ],
   "nonprofits": [
-    { "name": "Maui Reef Guardians", "causeTags": ["reef", "ocean"], "needs": ["cleanup volunteers", "donations"], "website": "https://example.org/reef-guardians" },
-    { "name": "Aloha Trail Keepers", "causeTags": ["trails", "wildlife", "hiking"], "needs": ["trail crew"], "website": "https://example.org/trail-keepers" },
-    { "name": "Maui Food Hub", "causeTags": ["food-security", "aina", "farming"], "needs": ["produce sorters", "drivers"], "website": "https://example.org/food-hub" }
+    {
+      "name": "Treecovery Hawaiʻi",
+      "causeTags": ["trees", "aina", "wildfire-recovery"],
+      "needs": ["nursery volunteers", "tree adoptions", "donations"],
+      "website": "https://treecoveryhawaii.org/",
+      "experiences": [
+        { "title": "Tree-planting day in Lāhainā with founder Duane Sparkman", "value": 250, "minDonation": 25 },
+        { "title": "Adopt a nursery tree for a fire-survivor family", "value": 75, "minDonation": 10 }
+      ]
+    },
+    {
+      "name": "Maui Humane Society",
+      "causeTags": ["animals", "family"],
+      "needs": ["Beach Buddies volunteers", "foster homes", "pet food"],
+      "website": "https://www.mauihumanesociety.org/",
+      "experiences": [
+        { "title": "Beach Buddies morning with a shelter dog", "value": 50, "minDonation": 10 }
+      ]
+    },
+    {
+      "name": "Hawaiʻi Wildlife Fund",
+      "causeTags": ["wildlife", "ocean", "reef"],
+      "needs": ["turtle patrol volunteers", "cleanup crews"],
+      "website": "https://www.wildhawaii.org/",
+      "experiences": [
+        { "title": "Dawn sea-turtle patrol for two with a field biologist", "value": 150, "minDonation": 20 }
+      ]
+    },
+    {
+      "name": "Kīpuka Olowalu",
+      "causeTags": ["aina", "farming", "culture"],
+      "needs": ["taro patch volunteers", "native planting crews"],
+      "website": "https://kipukaolowalu.org/",
+      "experiences": [
+        { "title": "Loʻi kalo (taro patch) restoration morning + valley tour", "value": 120, "minDonation": 15 }
+      ]
+    },
+    {
+      "name": "Maui Cultural Lands",
+      "causeTags": ["culture", "trails", "aina"],
+      "needs": ["Saturday restoration volunteers"],
+      "website": "https://www.mauiculturallands.org/",
+      "experiences": [
+        { "title": "Honokōwai Valley hike + cultural site restoration", "value": 130, "minDonation": 15 }
+      ]
+    },
+    {
+      "name": "Surfrider Foundation Maui",
+      "causeTags": ["ocean", "reef", "community"],
+      "needs": ["beach cleanup volunteers", "debris data loggers"],
+      "website": "https://maui.surfrider.org/",
+      "experiences": [
+        { "title": "Sunrise beach cleanup + reef-safe sunscreen talk-story", "value": 40, "minDonation": 5 }
+      ]
+    },
+    {
+      "name": "Maui Food Bank",
+      "causeTags": ["food-security", "community"],
+      "needs": ["produce sorters", "drivers", "food drives"],
+      "website": "https://mauifoodbank.org/",
+      "experiences": [
+        { "title": "Family food-box packing shift with local volunteers", "value": 60, "minDonation": 10 }
+      ]
+    },
+    {
+      "name": "Habitat for Humanity Maui",
+      "causeTags": ["community", "rebuilding"],
+      "needs": ["construction volunteers", "ReStore helpers"],
+      "website": "https://www.habitat-maui.org/",
+      "experiences": [
+        { "title": "Lāhainā rebuild construction day (tools provided)", "value": 180, "minDonation": 20 }
+      ]
+    }
   ],
   "endorsements": [
-    { "local": "Keoni", "nonprofit": "Maui Reef Guardians", "verdict": "helping_now" },
-    { "local": "Leilani", "nonprofit": "Maui Reef Guardians", "verdict": "helping_now" },
-    { "local": "Makoa", "nonprofit": "Maui Food Hub", "verdict": "helping_now" },
-    { "local": "Leilani", "nonprofit": "Aloha Trail Keepers", "verdict": "generally_helping" }
+    { "local": "Keoni", "nonprofit": "Surfrider Foundation Maui", "verdict": "helping_now" },
+    { "local": "Keoni", "nonprofit": "Hawaiʻi Wildlife Fund", "verdict": "helping_now" },
+    { "local": "Leilani", "nonprofit": "Treecovery Hawaiʻi", "verdict": "helping_now" },
+    { "local": "Leilani", "nonprofit": "Maui Cultural Lands", "verdict": "helping_now" },
+    { "local": "Makoa", "nonprofit": "Maui Food Bank", "verdict": "helping_now" },
+    { "local": "Makoa", "nonprofit": "Kīpuka Olowalu", "verdict": "generally_helping" },
+    { "local": "Keoni", "nonprofit": "Maui Humane Society", "verdict": "generally_helping" },
+    { "local": "Leilani", "nonprofit": "Habitat for Humanity Maui", "verdict": "generally_helping" }
   ]
 }
