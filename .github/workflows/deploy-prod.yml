@@ -6,7 +6,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-prod
+  # Dev and production currently share one backend Lambda/table.
+  group: alohalive-shared-backend-deploy
   cancel-in-progress: false
 
 permissions:
@@ -25,6 +26,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+      - name: Test production agent API contract
+        run: |
+          node --test infra/donations/agent-api.test.mjs
+          node --check infra/donations/agent-api.mjs
+          node --check infra/donations/index.mjs
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:

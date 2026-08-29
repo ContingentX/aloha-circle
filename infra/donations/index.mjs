@@ -6,15 +6,18 @@
 // against Google's securetoken certs.
 //
 // Public:  GET /experiences · POST /donate · GET /spin?session_id=cs_...
+//          GET /api/causes · GET/POST /api/nonprofits
+//          POST /api/visitors · POST /api/locals · POST /api/endorsements
 // Authed:  GET /me · POST /profile · POST /npo/claim · POST /npo/send-code
 //          POST /npo/verify-code · POST /local/submit
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, ScanCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
 import { createVerify, createHash, randomInt } from 'crypto';
+import { createAgentApi, createDynamoAgentStore } from './agent-api.mjs';
 
 const ssm = new SSMClient({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -89,6 +92,24 @@ const resp = (status, body, origin) => ({
 const emailDomain = (e) => (e ?? '').split('@')[1]?.toLowerCase() ?? '';
 const hstDay = () => new Date(Date.now() - 10 * 3600e3).toISOString().slice(0, 10); // Hawaii, no DST
 const sha256 = (s) => createHash('sha256').update(s).digest('hex');
+
+// Public agent records share the existing table but use their own PK namespace.
+// A nested record keeps DynamoDB keys out of the harness-compatible JSON shape.
+const agentStore = createDynamoAgentStore({
+  client: ddb,
+  table: TABLE,
+  QueryCommand,
+  PutCommand,
+});
+
+const agentApi = createAgentApi({ store: agentStore });
+const PUBLIC_AGENT_GETS = new Set(['/api/causes', '/api/nonprofits']);
+const PUBLIC_AGENT_POSTS = new Set([
+  '/api/visitors',
+  '/api/locals',
+  '/api/nonprofits',
+  '/api/endorsements',
+]);
 
 const getProfile = async (uid) =>
   (await ddb.send(new GetCommand({ TableName: TABLE, Key: { PK: `USER#${uid}`, SK: 'PROFILE' } }))).Item ?? null;
@@ -390,6 +411,24 @@ export const handler = async (event) => {
   const path = event.rawPath ?? '/';
   try {
     if (method === 'OPTIONS') return resp(204, {}, origin);
+    if (
+      (method === 'GET' && PUBLIC_AGENT_GETS.has(path))
+      || (method === 'POST' && PUBLIC_AGENT_POSTS.has(path))
+    ) {
+      let body = {};
+      if (method === 'POST') {
+        if (Buffer.byteLength(event.body ?? '', 'utf8') > 32768) {
+          return resp(413, { error: 'payload too large' }, origin);
+        }
+        try {
+          body = JSON.parse(event.body ?? '{}');
+        } catch {
+          return resp(400, { error: 'invalid JSON' }, origin);
+        }
+      }
+      const result = await agentApi.handle({ method, path, body });
+      return resp(result.status, result.body, origin);
+    }
     if (method === 'GET' && path === '/experiences') return await listExperiences(origin);
     if (method === 'POST' && path === '/donate') return await donate(JSON.parse(event.body ?? '{}'), origin);
     if (method === 'GET' && path === '/spin') {

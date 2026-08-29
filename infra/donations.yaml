@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: AlohaLive API - Lambda function URL (auth-backed profiles/verification, experiences, Stripe donations) + DynamoDB + verify-uploads bucket
+Description: AlohaLive API - agent matching, auth-backed profiles/verification, experiences, Stripe donations, DynamoDB, and verify uploads
 
 Resources:
   DataTable:
@@ -76,6 +76,7 @@ Resources:
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
                   - dynamodb:Scan
+                  - dynamodb:Query
                 Resource: !GetAtt DataTable.Arn
               - Effect: Allow
                 Action: s3:PutObject
@@ -101,8 +102,8 @@ Resources:
           TABLE: !Ref DataTable
           VERIFY_BUCKET: !Ref VerifyBucket
       Code:
-        # Bootstrap stub; real code is uploaded by infra/deploy.sh
-        # (aws lambda update-function-code with infra/donations/index.mjs).
+        # Bootstrap stub; the real multi-file bundle is uploaded by
+        # infra/deploy.sh with aws lambda update-function-code.
         ZipFile: |
           exports.handler = async () => ({ statusCode: 503, body: '{"error":"bootstrapping"}' });
 
@@ -146,6 +147,9 @@ Resources:
       ApiId: !Ref HttpApi
       StageName: $default
       AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 40
+        ThrottlingRateLimit: 20
 
   HttpApiPermission:
     Type: AWS::Lambda::Permission
@@ -157,5 +161,5 @@ Resources:
 
 Outputs:
   ApiEndpoint:
-    Description: Public HTTP API endpoint for the AlohaLive API (VITE_API in www builds).
+    Description: Public HTTP API endpoint for the AlohaLive API (VITE_API_BASE in www builds).
     Value: !GetAtt HttpApi.ApiEndpoint
