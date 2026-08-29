@@ -4,7 +4,7 @@ Description: AlohaLive CI/CD - GitHub OIDC deploy role (provider already exists 
 Parameters:
   GitHubOrg:
     Type: String
-    Default: oceanseth
+    Default: ContingentX
   GitHubRepo:
     Type: String
     Default: alohalive
@@ -16,7 +16,7 @@ Parameters:
   # GET /repos/{org}/{repo}/actions/oidc/customization/sub.
   SubClaimPrefix:
     Type: String
-    Default: "repo:oceanseth@63625290/alohalive@1350786374"
+    Default: "repo:ContingentX@311893860/alohalive@1350786374"
   CreateOidcProvider:
     Type: String
     AllowedValues: ["true", "false"]
