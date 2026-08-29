@@ -15,11 +15,7 @@ function endorsementScore(nonprofitName, endorsements) {
     .reduce((sum, e) => sum + (verdictWeight[e.verdict] ?? 0), 0);
 }
 
-export function matchVisitor(visitor) {
-  const locals = load('locals');
-  const causes = load('causes');
-  const endorsements = load('endorsements');
-
+export function rankMatch(visitor, { locals, causes, endorsements }) {
   let best = null;
   for (const local of locals) {
     const sharedInterests = overlap(visitor.interests, local.interests);
@@ -47,16 +43,43 @@ export function matchVisitor(visitor) {
     best.cause.summary,
   ].join(' ');
 
-  return insert('matches', {
+  return {
     visitorId: visitor.id,
     visitorName: visitor.name,
     localId: best.local.id,
     localName: best.local.name,
     localTown: best.local.town,
+    causeId: best.cause.id,
     cause: best.cause.title,
     causeTags: best.cause.causeTags,
     why,
     suggestedAction: best.cause.action ?? `Ask ${best.local.name} how to help with "${best.cause.title}".`,
     score: best.score,
+    blocks: [
+      {
+        type: 'local',
+        id: best.local.id,
+        name: best.local.name,
+        town: best.local.town,
+        sharedInterests: best.sharedInterests,
+      },
+      {
+        type: 'cause',
+        id: best.cause.id,
+        title: best.cause.title,
+        sourceUrl: best.cause.url,
+        fetchedAt: best.cause.fetchedAt,
+      },
+      { type: 'action', text: best.cause.action ?? `Ask ${best.local.name} how to help with "${best.cause.title}".` },
+    ],
+  };
+}
+
+export function matchVisitor(visitor) {
+  const match = rankMatch(visitor, {
+    locals: load('locals'),
+    causes: load('causes'),
+    endorsements: load('endorsements'),
   });
+  return match ? insert('matches', match) : null;
 }

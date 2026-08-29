@@ -31,6 +31,19 @@ cd app && npm install && npx expo start
 
 Sign up as a visitor on the site — you'll get an instant match against the seeded locals/causes. The harness re-ingests CauseSignals continuously from `agentharness/src/sources.json`.
 
+## TrueForge vertical slice
+
+The agent harness also exposes a bounded TrueForge workflow: a persistent session reads AlohaLive context through MCP, recomputes the deterministic match in a Daytona sandbox, and pauses for human approval before it can persist one idempotent demo introduction-request record. It does not send a message, make a donation, deploy anything, or perform a real-world introduction.
+
+The default test suite is hermetic and needs no provider credentials:
+
+```bash
+npm --prefix agentharness ci
+npm --prefix agentharness test
+```
+
+The live evidence test is intentionally opt-in because it requires a locally configured TrueForge instance, model, Daytona sandbox provider, and MCP connector. See [`agentharness/TRUEFORGE.md`](agentharness/TRUEFORGE.md) for the exact setup, denial/approval checks, and reconnect proof.
+
 ## Branches & Deploys
 
 Day-to-day work happens on **`dev`** (the default branch); **`production`** is the live release branch. GitHub Actions deploys on push, assuming the `alohalive-github-deploy` IAM role via OIDC (repo variable `AWS_DEPLOY_ROLE_ARN`):
