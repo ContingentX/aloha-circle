@@ -27,14 +27,40 @@ variables point builds here): `GET /api/health`, `GET /api/nonprofits`
 (seeded/agent-written `NPO#` items merged with verified signed-up nonprofits),
 `GET /api/causes`, `POST /api/visitors {name, interests[]}` (runs the
 deterministic matcher, returns `{visitor, match}`), `POST /api/locals`,
-`POST /api/endorsements {local, nonprofit, verdict}`. Item shapes are
-documented at the top of the "public data plane" section in
-`donations/index.mjs`; seed demo data with `./infra/seed-demo-data.sh`.
-The Aloha agent updates the site by writing those same DynamoDB items.
+`POST /api/nonprofits`, and `POST /api/endorsements {local, nonprofit,
+verdict}`. Anonymous community writes are pending/unverified and never affect
+trusted counts or matching. Item shapes are documented at the top of the
+"public data plane" section in `donations/index.mjs`; every public item must
+carry `entityType`, `entityId`, `schemaVersion`, and `version` so the public
+data remains index-ready and agent updates can use conditional
+versions. The current small-table adapter uses a paginated, short-lived cache
+of verified public records; an index migration is intentionally deferred until
+the shared production table can be audited. Deploys run
+`./infra/seed-demo-data.sh`, which creates missing fixtures and backfills only
+contract metadata on recognized legacy fixture rows. The Aloha agent updates
+the site by conditionally writing those same versioned DynamoDB items.
 Authed (`Authorization: Bearer <Firebase ID token>`): `GET /me`,
 `POST /profile`, `POST /npo/claim`, `POST /npo/send-code`,
 `POST /npo/verify-code`, `POST /local/submit`, `POST /experiences`
 (verified nonprofits only).
+
+### Aloha Agent record contract
+
+The agent may write only the public prefixes `NPO#`, `CAUSE#`, `LOCAL#`, and
+`ENDORSE#`; it must never receive table-wide permission to the co-located
+`USER#`, `DON#`, `EXP#`, or `CNT#` records. Each public item uses `SK=META`, a
+stable `entityId`, the matching `entityType` (`nonprofit`, `cause`, `local`, or
+`endorsement`), `schemaVersion=1`, an incrementing `version`, `updatedAt`, and a
+`status`. IDs are stable opaque strings, not necessarily UUIDs (the demo uses
+slugs such as `seed-keoni` and `lahaina-replant`). Agent tools must validate
+them as bounded opaque IDs. Agent updates should use
+`version = :expectedVersion` as a condition and read the item back as the write
+receipt.
+
+A published CauseSignal requires `source`, `url`, `title`, `causeTags[]`,
+`urgency` (1–5), `summary`, `fetchedAt`, `nonprofit`, and stable
+`nonprofitId`. Pending/unverified community records are retained for review but
+cannot influence public trust counts or matching.
 
 ## Verification model
 
@@ -48,8 +74,9 @@ Authed (`Authorization: Bearer <Firebase ID token>`): `GET /me`,
 ## Deploying
 
 `infra/deploy.sh <dev|prod>` deploys the site stack, the `alohalive-donations`
-stack, and uploads the Lambda code. Frontend picks the API endpoint from
-`VITE_API` (defaults to the deployed endpoint in `www/src/appApi.js`).
+stack, backfills the demo contract fields, uploads the Lambda code, waits for
+it, and smoke-tests the public API. The frontend uses `VITE_API_BASE` when
+supplied and otherwise discovers the deployed `ApiEndpoint` stack output.
 
 ## Reviewing local (bill-photo) verifications
 

@@ -149,7 +149,10 @@
       "urgency": 5,
       "action": "Join a Treecovery planting day in Lāhainā",
       "nonprofit": "Treecovery Hawaiʻi",
-      "url": "https://treecoveryhawaii.org/"
+      "nonprofitId": "treecovery",
+      "url": "https://treecoveryhawaii.org/",
+      "source": "demo-seed",
+      "fetchedAt": "2026-08-29T00:00:00.000Z"
     },
     {
       "slug": "hot-meals",
@@ -163,7 +166,10 @@
       "urgency": 4,
       "action": "Volunteer a farm morning with Hua Momona",
       "nonprofit": "Hua Momona Farms",
-      "url": "https://www.huamomonafarms.com/"
+      "nonprofitId": "hua-momona",
+      "url": "https://www.huamomonafarms.com/",
+      "source": "demo-seed",
+      "fetchedAt": "2026-08-29T00:00:00.000Z"
     },
     {
       "slug": "beach-buddies",
@@ -177,7 +183,10 @@
       "urgency": 3,
       "action": "Book a Beach Buddies morning",
       "nonprofit": "Maui Humane Society",
-      "url": "https://www.mauihumanesociety.org/"
+      "nonprofitId": "maui-humane",
+      "url": "https://www.mauihumanesociety.org/",
+      "source": "demo-seed",
+      "fetchedAt": "2026-08-29T00:00:00.000Z"
     },
     {
       "slug": "hawksbill-patrol",
@@ -191,7 +200,10 @@
       "urgency": 4,
       "action": "Join a dawn sea-turtle patrol",
       "nonprofit": "Hawaiʻi Wildlife Fund",
-      "url": "https://www.wildhawaii.org/"
+      "nonprofitId": "hawaii-wildlife-fund",
+      "url": "https://www.wildhawaii.org/",
+      "source": "demo-seed",
+      "fetchedAt": "2026-08-29T00:00:00.000Z"
     },
     {
       "slug": "olowalu-loi",
@@ -205,7 +217,10 @@
       "urgency": 3,
       "action": "Work a taro patch morning at Kīpuka Olowalu",
       "nonprofit": "Kīpuka Olowalu",
-      "url": "https://kipukaolowalu.org/"
+      "nonprofitId": "kipuka-olowalu",
+      "url": "https://kipukaolowalu.org/",
+      "source": "demo-seed",
+      "fetchedAt": "2026-08-29T00:00:00.000Z"
     },
     {
       "slug": "honokowai-saturday",
@@ -219,7 +234,10 @@
       "urgency": 3,
       "action": "Join the Saturday Honokōwai hike-in",
       "nonprofit": "Maui Cultural Lands",
-      "url": "https://www.mauiculturallands.org/"
+      "nonprofitId": "maui-cultural-lands",
+      "url": "https://www.mauiculturallands.org/",
+      "source": "demo-seed",
+      "fetchedAt": "2026-08-29T00:00:00.000Z"
     },
     {
       "slug": "kahului-cleanup",
@@ -233,7 +251,10 @@
       "urgency": 3,
       "action": "Join the sunrise beach cleanup",
       "nonprofit": "Surfrider Foundation Maui",
-      "url": "https://maui.surfrider.org/"
+      "nonprofitId": "surfrider-maui",
+      "url": "https://maui.surfrider.org/",
+      "source": "demo-seed",
+      "fetchedAt": "2026-08-29T00:00:00.000Z"
     },
     {
       "slug": "food-boxes",
@@ -247,7 +268,10 @@
       "urgency": 4,
       "action": "Pack food boxes with Maui Food Bank",
       "nonprofit": "Maui Food Bank",
-      "url": "https://mauifoodbank.org/"
+      "nonprofitId": "maui-food-bank",
+      "url": "https://mauifoodbank.org/",
+      "source": "demo-seed",
+      "fetchedAt": "2026-08-29T00:00:00.000Z"
     },
     {
       "slug": "lahaina-framing",
@@ -261,7 +285,10 @@
       "urgency": 5,
       "action": "Swing a hammer on a Lāhainā rebuild day",
       "nonprofit": "Habitat for Humanity Maui",
-      "url": "https://www.habitat-maui.org/"
+      "nonprofitId": "habitat-maui",
+      "url": "https://www.habitat-maui.org/",
+      "source": "demo-seed",
+      "fetchedAt": "2026-08-29T00:00:00.000Z"
     }
   ],
   "locals": [
@@ -315,56 +342,83 @@
     {
       "slug": "seed-1",
       "local": "Keoni",
+      "localId": "seed-keoni",
       "nonprofit": "Surfrider Foundation Maui",
-      "verdict": "helping_now"
+      "nonprofitId": "surfrider-maui",
+      "verdict": "helping_now",
+      "verified": true
     },
     {
       "slug": "seed-2",
       "local": "Keoni",
+      "localId": "seed-keoni",
       "nonprofit": "Hawaiʻi Wildlife Fund",
-      "verdict": "helping_now"
+      "nonprofitId": "hawaii-wildlife-fund",
+      "verdict": "helping_now",
+      "verified": true
     },
     {
       "slug": "seed-3",
       "local": "Leilani",
+      "localId": "seed-leilani",
       "nonprofit": "Treecovery Hawaiʻi",
-      "verdict": "helping_now"
+      "nonprofitId": "treecovery",
+      "verdict": "helping_now",
+      "verified": true
     },
     {
       "slug": "seed-4",
       "local": "Makoa",
+      "localId": "seed-makoa",
       "nonprofit": "Hua Momona Farms",
-      "verdict": "helping_now"
+      "nonprofitId": "hua-momona",
+      "verdict": "helping_now",
+      "verified": true
     },
     {
       "slug": "seed-5",
       "local": "Leilani",
+      "localId": "seed-leilani",
       "nonprofit": "Maui Cultural Lands",
-      "verdict": "helping_now"
+      "nonprofitId": "maui-cultural-lands",
+      "verdict": "helping_now",
+      "verified": true
     },
     {
       "slug": "seed-6",
       "local": "Makoa",
+      "localId": "seed-makoa",
       "nonprofit": "Maui Food Bank",
-      "verdict": "helping_now"
+      "nonprofitId": "maui-food-bank",
+      "verdict": "helping_now",
+      "verified": true
     },
     {
       "slug": "seed-7",
       "local": "Makoa",
+      "localId": "seed-makoa",
       "nonprofit": "Kīpuka Olowalu",
-      "verdict": "generally_helping"
+      "nonprofitId": "kipuka-olowalu",
+      "verdict": "generally_helping",
+      "verified": true
     },
     {
       "slug": "seed-8",
       "local": "Keoni",
+      "localId": "seed-keoni",
       "nonprofit": "Maui Humane Society",
-      "verdict": "generally_helping"
+      "nonprofitId": "maui-humane",
+      "verdict": "generally_helping",
+      "verified": true
     },
     {
       "slug": "seed-9",
       "local": "Leilani",
+      "localId": "seed-leilani",
       "nonprofit": "Habitat for Humanity Maui",
-      "verdict": "generally_helping"
+      "nonprofitId": "habitat-maui",
+      "verdict": "generally_helping",
+      "verified": true
     }
   ],
   "experiences": [

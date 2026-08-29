@@ -7,7 +7,8 @@
 //
 // Public:  GET /experiences · POST /donate · GET /spin?session_id=cs_...
 //          GET /api/health · GET /api/nonprofits · GET /api/causes
-//          POST /api/visitors · POST /api/locals · POST /api/endorsements
+//          POST /api/visitors · POST /api/locals · POST /api/nonprofits
+//          POST /api/endorsements
 // Authed:  GET /me · POST /profile · POST /npo/claim · POST /npo/send-code
 //          POST /npo/verify-code · POST /local/submit
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
@@ -17,6 +18,8 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
 import { createVerify, createHash, randomInt, randomUUID } from 'crypto';
+import { PublicApiError, parseJsonObject } from './public-api-core.mjs';
+import { createDynamoPublicStore, createPublicApi } from './public-api.mjs';
 
 const ssm = new SSMClient({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -255,165 +258,25 @@ async function localSubmit(user, body, origin) {
 
 // ---- public data plane (/api/*) ----
 // The visitor↔local↔cause matching data lives in the same single table, one
-// item per record with SK 'META' (mirrors agentharness/src/store.js collections;
-// the Aloha agent writes these same shapes to update the live site):
-//   NPO#<slug>     { name, causeTags[], needs[], website, source }
-//   CAUSE#<slug>   { title, summary, causeTags[], urgency, action?, nonprofit?, url? }
-//   LOCAL#<id>     { name, town, interests[], causes[], verified }
-//   VISITOR#<id>   { name, interests[], groupType? }
-//   ENDORSE#<id>   { local, nonprofit, verdict, note? }
-//   MATCH#<id>     { visitorName, localName, localTown, cause, why, suggestedAction, score }
-
-async function scanPrefix(prefix) {
-  const items = [];
-  let startKey;
-  do {
-    const out = await ddb.send(new ScanCommand({
-      TableName: TABLE,
-      FilterExpression: 'begins_with(PK, :p) AND SK = :sk',
-      ExpressionAttributeValues: { ':p': prefix, ':sk': 'META' },
-      ExclusiveStartKey: startKey,
-    }));
-    items.push(...(out.Items ?? []));
-    startKey = out.LastEvaluatedKey;
-  } while (startKey);
-  return items;
-}
-
-const str = (v, max) => String(v ?? '').slice(0, max);
-const tags = (v, maxItems = 12) =>
-  (Array.isArray(v) ? v : []).slice(0, maxItems).map((t) => str(t, 32)).filter(Boolean);
-
-async function putRecord(prefix, fields) {
-  const id = randomUUID();
-  const item = { PK: `${prefix}#${id}`, SK: 'META', createdAt: new Date().toISOString(), ...fields };
-  await ddb.send(new PutCommand({ TableName: TABLE, Item: item }));
-  return { id, ...fields, createdAt: item.createdAt };
-}
-
-async function apiHealth(origin) {
-  const counts = {};
-  for (const [name, prefix] of [
-    ['nonprofits', 'NPO#'], ['causes', 'CAUSE#'], ['locals', 'LOCAL#'],
-    ['visitors', 'VISITOR#'], ['endorsements', 'ENDORSE#'], ['matches', 'MATCH#'],
-  ]) counts[name] = (await scanPrefix(prefix)).length;
-  return resp(200, { ok: true, service: 'alohalive-api', counts }, origin);
-}
-
-async function listNonprofits(origin) {
-  const [npos, endorsements, users] = await Promise.all([
-    scanPrefix('NPO#'),
-    scanPrefix('ENDORSE#'),
-    ddb.send(new ScanCommand({
-      TableName: TABLE,
-      FilterExpression: 'begins_with(PK, :p) AND SK = :sk AND #r = :np AND ver_status = :v',
-      ExpressionAttributeNames: { '#r': 'role' },
-      ExpressionAttributeValues: { ':p': 'USER#', ':sk': 'PROFILE', ':np': 'nonprofit', ':v': 'verified' },
-    })).then((out) => out.Items ?? []),
-  ]);
-  const seededNames = new Set(npos.map((n) => (n.name ?? '').toLowerCase()));
-  // verified signed-up nonprofits appear alongside the seeded/agent-written ones
-  const signups = users
-    .filter((u) => u.orgName && !seededNames.has(u.orgName.toLowerCase()))
-    .map((u) => ({ PK: u.PK, name: u.orgName, causeTags: [], needs: [], website: u.domain ? `https://${u.domain}/` : null }));
-  const list = [...npos, ...signups].map((n) => {
-    const forNp = endorsements.filter((e) => e.nonprofit === n.name);
-    return {
-      id: n.PK.slice(n.PK.indexOf('#') + 1),
-      name: n.name, causeTags: n.causeTags ?? [], needs: n.needs ?? [], website: n.website ?? null,
-      endorsements: forNp.length,
-      helpingNow: forNp.filter((e) => e.verdict === 'helping_now').length,
-    };
-  }).sort((a, b) => b.helpingNow - a.helpingNow || a.name.localeCompare(b.name));
-  return resp(200, list, origin);
-}
-
-async function listCauses(origin) {
-  const causes = (await scanPrefix('CAUSE#'))
-    .map((c) => ({
-      id: c.PK.slice(6), title: c.title, summary: c.summary,
-      causeTags: c.causeTags ?? [], urgency: c.urgency ?? 1,
-    }))
-    .sort((a, b) => (b.urgency ?? 0) - (a.urgency ?? 0));
-  return resp(200, causes, origin);
-}
-
-// Deterministic matcher — same scoring as agentharness/src/matcher.js, so the
-// TrueForge agent can replace it later with the same inputs and Match shape.
-const overlap = (a = [], b = []) => {
-  const setB = new Set(b.map((x) => String(x).toLowerCase()));
-  return (a ?? []).filter((x) => setB.has(String(x).toLowerCase()));
-};
-
-async function createVisitor(body, origin) {
-  const name = str(body.name, 80);
-  const interests = tags(body.interests);
-  if (!name || interests.length === 0) return resp(400, { error: 'name and interests[] are required' }, origin);
-  const visitor = await putRecord('VISITOR', { name, interests, groupType: body.groupType ? str(body.groupType, 40) : null });
-
-  const [locals, causes, endorsements] = await Promise.all([
-    scanPrefix('LOCAL#'), scanPrefix('CAUSE#'), scanPrefix('ENDORSE#'),
-  ]);
-  const verdictWeight = { helping_now: 2, generally_helping: 1, not_sure: 0, causing_concern: -3 };
-  let best = null;
-  for (const local of locals) {
-    const sharedInterests = overlap(interests, local.interests);
-    for (const cause of causes) {
-      const trust = endorsements
-        .filter((e) => e.nonprofit === cause.nonprofit)
-        .reduce((sum, e) => sum + (verdictWeight[e.verdict] ?? 0), 0);
-      const score =
-        sharedInterests.length * 3 +
-        overlap(local.causes, cause.causeTags).length * 2 +
-        overlap(interests, cause.causeTags).length * 2 +
-        (cause.urgency ?? 0) +
-        Math.min(trust, 5);
-      if (!best || score > best.score) best = { local, cause, sharedInterests, score };
-    }
-  }
-  let match = null;
-  if (best && best.score > 0) {
-    const why = [
-      best.sharedInterests.length
-        ? `You and ${best.local.name} both care about ${best.sharedInterests.join(' and ')}.`
-        : `${best.local.name} knows this cause well.`,
-      best.cause.summary,
-    ].join(' ');
-    match = await putRecord('MATCH', {
-      visitorId: visitor.id, visitorName: name,
-      localId: best.local.PK.slice(6), localName: best.local.name, localTown: best.local.town ?? null,
-      cause: best.cause.title, causeTags: best.cause.causeTags ?? [],
-      why,
-      suggestedAction: best.cause.action ?? `Ask ${best.local.name} how to help with "${best.cause.title}".`,
-      score: best.score,
-    });
-  }
-  return resp(201, { visitor, match }, origin);
-}
-
-async function createLocal(body, origin) {
-  const name = str(body.name, 80);
-  const interests = tags(body.interests);
-  if (!name || interests.length === 0) return resp(400, { error: 'name and interests[] are required' }, origin);
-  const local = await putRecord('LOCAL', {
-    name, interests, causes: tags(body.causes),
-    town: body.town ? str(body.town, 80) : null, verified: false,
-  });
-  return resp(201, local, origin);
-}
-
-const VERDICTS = ['helping_now', 'generally_helping', 'not_sure', 'causing_concern'];
-async function createEndorsement(body, origin) {
-  const local = str(body.local, 80);
-  const nonprofit = str(body.nonprofit, 120);
-  if (!local || !nonprofit || !VERDICTS.includes(body.verdict)) {
-    return resp(400, { error: `local, nonprofit and verdict (${VERDICTS.join('|')}) are required` }, origin);
-  }
-  const endorsement = await putRecord('ENDORSE', {
-    local, nonprofit, verdict: body.verdict, note: body.note ? str(body.note, 280) : null,
-  });
-  return resp(201, endorsement, origin);
-}
+// item per record with SK 'META'. Every record also carries stable entityType
+// and entityId metadata; the Aloha agent must preserve these fields when it
+// conditionally upserts a record. The current adapter uses one paginated,
+// short-lived trusted-record scan so legacy records remain visible; an index
+// migration can follow after the shared production table has been audited.
+//   NPO#<slug>     { entityType: nonprofit, entityId, status, verified, ... }
+//   CAUSE#<slug>   { entityType: cause, entityId, source, url, fetchedAt, ... }
+//   LOCAL#<id>     { entityType: local, entityId, status, verified, ... }
+//   VISITOR#<id>   { entityType: visitor, entityId, ttl, ... }
+//   ENDORSE#<id>   { entityType: endorsement, entityId, status, verified, ... }
+//   MATCH#<id>     { entityType: match, entityId, causeId, blocks, ttl, ... }
+const publicStore = createDynamoPublicStore({
+  client: ddb,
+  table: TABLE,
+  PutCommand,
+  ScanCommand,
+  randomId: randomUUID,
+});
+const publicApi = createPublicApi({ store: publicStore });
 
 // ---- experiences ----
 async function listExperiences(origin) {
@@ -552,33 +415,35 @@ export const handler = async (event) => {
   const origin = event.headers?.origin ?? '';
   const method = event.requestContext?.http?.method;
   const path = event.rawPath ?? '/';
+  let parsedBody;
+  const body = () => {
+    if (parsedBody === undefined) parsedBody = parseJsonObject(event.body ?? '{}');
+    return parsedBody;
+  };
   try {
     if (method === 'OPTIONS') return resp(204, {}, origin);
     if (method === 'GET' && path === '/experiences') return await listExperiences(origin);
-    if (method === 'POST' && path === '/donate') return await donate(JSON.parse(event.body ?? '{}'), origin);
+    if (method === 'POST' && path === '/donate') return await donate(body(), origin);
     if (method === 'GET' && path === '/spin') {
       return await spin(new URLSearchParams(event.rawQueryString ?? '').get('session_id'), origin);
     }
-    if (method === 'GET' && path === '/api/health') return await apiHealth(origin);
-    if (method === 'GET' && path === '/api/nonprofits') return await listNonprofits(origin);
-    if (method === 'GET' && path === '/api/causes') return await listCauses(origin);
-    if (method === 'POST' && path === '/api/visitors') return await createVisitor(JSON.parse(event.body ?? '{}'), origin);
-    if (method === 'POST' && path === '/api/locals') return await createLocal(JSON.parse(event.body ?? '{}'), origin);
-    if (method === 'POST' && path === '/api/endorsements') return await createEndorsement(JSON.parse(event.body ?? '{}'), origin);
+    const publicResult = await publicApi.handle({ method, path, rawBody: event.body });
+    if (publicResult) return resp(publicResult.statusCode, publicResult.body, origin);
 
     const user = await verifyToken(event.headers);
     if (!user) return resp(401, { error: 'sign in required' }, origin);
-    const body = method === 'POST' ? JSON.parse(event.body ?? '{}') : {};
+    const requestBody = method === 'POST' ? body() : {};
     if (method === 'GET' && path === '/me') return await me(user, origin);
-    if (method === 'POST' && path === '/profile') return await saveProfile(user, body, origin);
-    if (method === 'POST' && path === '/npo/claim') return await npoClaim(user, body, origin);
-    if (method === 'POST' && path === '/npo/send-code') return await npoSendCode(user, body, origin);
-    if (method === 'POST' && path === '/npo/verify-code') return await npoVerifyCode(user, body, origin);
-    if (method === 'POST' && path === '/local/submit') return await localSubmit(user, body, origin);
-    if (method === 'POST' && path === '/experiences') return await createExperience(user, body, origin);
+    if (method === 'POST' && path === '/profile') return await saveProfile(user, requestBody, origin);
+    if (method === 'POST' && path === '/npo/claim') return await npoClaim(user, requestBody, origin);
+    if (method === 'POST' && path === '/npo/send-code') return await npoSendCode(user, requestBody, origin);
+    if (method === 'POST' && path === '/npo/verify-code') return await npoVerifyCode(user, requestBody, origin);
+    if (method === 'POST' && path === '/local/submit') return await localSubmit(user, requestBody, origin);
+    if (method === 'POST' && path === '/experiences') return await createExperience(user, requestBody, origin);
     return resp(404, { error: 'not found' }, origin);
   } catch (err) {
     console.error(err);
+    if (err instanceof PublicApiError) return resp(err.status, { error: err.message }, origin);
     return resp(500, { error: 'internal error' }, origin);
   }
 };

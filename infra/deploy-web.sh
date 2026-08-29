@@ -2,8 +2,8 @@
 # Build the www Vite app and publish it to an environment's site bucket, then
 # invalidate CloudFront. Run after deploy.sh has created the site stack.
 #   usage: ./infra/deploy-web.sh <dev|prod>
-# Optional: VITE_API_BASE in the environment points the built site at a hosted
-# agentharness API (defaults to none — the live needs feed stays empty until set).
+# VITE_API_BASE may be supplied by the workflow; when it is absent, this script
+# discovers the API Gateway endpoint from the deployed donations stack.
 set -euo pipefail
 
 ENV="${1:-}"
@@ -23,6 +23,20 @@ stack_out() {
 
 BUCKET="$(stack_out BucketName)"
 DIST_ID="$(stack_out DistributionId)"
+
+if [[ -z "${VITE_API_BASE:-}" ]]; then
+  VITE_API_BASE="$(aws cloudformation describe-stacks \
+    --stack-name alohalive-donations \
+    --region "$REGION" \
+    --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
+    --output text)"
+  export VITE_API_BASE
+fi
+if [[ -z "$VITE_API_BASE" || "$VITE_API_BASE" == "None" ]]; then
+  echo "error: VITE_API_BASE is unset and ApiEndpoint could not be discovered" >&2
+  exit 1
+fi
+echo "==> [$ENV] Using API $VITE_API_BASE"
 
 echo "==> [$ENV] Building www"
 ( cd "$ROOT/www" && npm ci && npm run build )

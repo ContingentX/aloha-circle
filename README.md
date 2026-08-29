@@ -40,14 +40,12 @@ Day-to-day work happens on **`dev`** (the default branch); **`production`** is t
 | `dev` | [deploy-dev.yml](.github/workflows/deploy-dev.yml) | https://dev.alohalive.net |
 | `production` | [deploy-prod.yml](.github/workflows/deploy-prod.yml) | https://alohalive.net (www redirects to apex) |
 
-Each deploy re-applies [`infra/site.yaml`](infra/site.yaml) (S3 + CloudFront + ACM + Route53 per environment) then builds `www` and syncs it to the environment's bucket with a CloudFront invalidation (`infra/deploy.sh` + `infra/deploy-web.sh`). The one-time OIDC role lives in [`infra/cicd.yaml`](infra/cicd.yaml) (stack `alohalive-cicd`). Set the repo variables `VITE_API_BASE_DEV` / `VITE_API_BASE_PROD` once the agent harness is hosted so the static site can reach the API.
+Each deploy re-applies [`infra/site.yaml`](infra/site.yaml) (S3 + CloudFront + ACM + Route53 per environment) then builds `www` and syncs it to the environment's bucket with a CloudFront invalidation (`infra/deploy.sh` + `infra/deploy-web.sh`). The one-time OIDC role lives in [`infra/cicd.yaml`](infra/cicd.yaml) (stack `alohalive-cicd`). CI discovers the deployed API Gateway endpoint from the `alohalive-donations` stack so the site and deployment smoke test use the same backend.
 
 Release flow: PR feature → `dev` (auto-deploys dev site) → PR `dev` → `production` (auto-deploys live site).
 
 ## Qodo Code Review Evidence
 
-_Placeholder — every PR in this repo is reviewed by Qodo. PR links and findings addressed will be listed here._
-
 | PR | Qodo findings | Resolution |
 |----|---------------|------------|
-| — | — | — |
+| [#18](https://github.com/ContingentX/alohalive/pull/18) | 6 bugs, 3 rule violations (review arrived after merge) | Findings are addressed in the focused public-API hardening follow-up. |
