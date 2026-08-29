@@ -6,11 +6,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { upsert, save, load } from './store.js';
+import { upsert, load, getDataDir } from './store.js';
 
 const SRC_DIR = path.dirname(fileURLToPath(import.meta.url));
 const HARNESS_DIR = path.join(SRC_DIR, '..');
-const STATUS_FILE = path.join(HARNESS_DIR, 'data', 'sources.status.json');
 
 const parsers = {
   fixture(source) {
@@ -61,8 +60,9 @@ export function ingestOnce() {
     }
   }
 
-  fs.mkdirSync(path.dirname(STATUS_FILE), { recursive: true });
-  fs.writeFileSync(STATUS_FILE, JSON.stringify({ ranAt: new Date().toISOString(), status }, null, 2));
+  const statusFile = path.join(getDataDir(), 'sources.status.json');
+  fs.mkdirSync(path.dirname(statusFile), { recursive: true });
+  fs.writeFileSync(statusFile, JSON.stringify({ ranAt: new Date().toISOString(), status }, null, 2));
   return { status, totalCauses: load('causes').length };
 }
 
