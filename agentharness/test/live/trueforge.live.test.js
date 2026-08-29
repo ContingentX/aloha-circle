@@ -11,29 +11,31 @@ if (process.env.RUN_TRUEFORGE_LIVE !== '1') {
 }
 
 const HARNESS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const testDataDir = mkdtempSync(path.join(os.tmpdir(), 'alohalive-trueforge-live-'));
-process.env.ALOHALIVE_DATA_DIR = testDataDir;
-
-const [{ createServer }, store, { ingestOnce }, trueforge] = await Promise.all([
-  import('../../src/server.js'),
-  import('../../src/store.js'),
-  import('../../src/ingest.js'),
-  import('../../src/trueforge.js'),
-]);
-
 function eventTypes(result) {
   return new Set(result.trace.map((event) => event.type));
 }
 
 test('live TrueForge trace includes MCP, sandbox, approval, effect, and reconnect', { timeout: 600_000 }, async (t) => {
+  const testDataDir = mkdtempSync(path.join(os.tmpdir(), 'alohalive-trueforge-live-'));
+  process.env.ALOHALIVE_DATA_DIR = testDataDir;
   const port = Number(process.env.ALOHALIVE_LIVE_PORT ?? 8787);
-  const httpServer = createServer().listen(port, '127.0.0.1');
-  await once(httpServer, 'listening');
+  let httpServer;
   t.after(async () => {
-    await new Promise((resolve, reject) => httpServer.close((error) => (error ? reject(error) : resolve())));
+    if (httpServer?.listening) {
+      await new Promise((resolve, reject) => httpServer.close((error) => (error ? reject(error) : resolve())));
+    }
     delete process.env.ALOHALIVE_DATA_DIR;
     rmSync(testDataDir, { recursive: true, force: true });
   });
+
+  const [{ createServer }, store, { ingestOnce }, trueforge] = await Promise.all([
+    import('../../src/server.js'),
+    import('../../src/store.js'),
+    import('../../src/ingest.js'),
+    import('../../src/trueforge.js'),
+  ]);
+  httpServer = createServer().listen(port, '127.0.0.1');
+  await once(httpServer, 'listening');
 
   store.seedIfEmpty(path.join(HARNESS_DIR, 'fixtures', 'seed.json'));
   ingestOnce();

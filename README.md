@@ -30,6 +30,8 @@ cd app && npm install && npx expo start
 # in the app, set API base to http://<your-LAN-IP>:8787
 ```
 
+LAN binding is only for the visitor-facing API. The MCP endpoint and `/api/agent/*` control surface remain loopback-only even when `ALOHALIVE_HOST=0.0.0.0` is set.
+
 Sign up as a visitor on the site — you'll get an instant match against the seeded locals/causes. The harness re-ingests CauseSignals continuously from `agentharness/src/sources.json`.
 
 ## TrueForge vertical slice

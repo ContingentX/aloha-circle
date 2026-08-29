@@ -10,19 +10,6 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
 const HARNESS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const testDataDir = mkdtempSync(path.join(os.tmpdir(), 'alohalive-trueforge-contract-'));
-process.env.ALOHALIVE_DATA_DIR = testDataDir;
-
-const [{ createServer }, store, { ingestOnce }, introductions, trueforge, matcher, mcp] = await Promise.all([
-  import('../src/server.js'),
-  import('../src/store.js'),
-  import('../src/ingest.js'),
-  import('../src/introductions.js'),
-  import('../src/trueforge.js'),
-  import('../src/matcher.js'),
-  import('../src/mcp.js'),
-]);
-
 function completedStream(turnId) {
   const entries = [
     {
@@ -53,6 +40,8 @@ function completedStream(turnId) {
 }
 
 test('MCP tools and TrueForge manifest enforce the vertical-slice contract', async (t) => {
+  const testDataDir = mkdtempSync(path.join(os.tmpdir(), 'alohalive-trueforge-contract-'));
+  process.env.ALOHALIVE_DATA_DIR = testDataDir;
   let httpServer;
   let mcpClient;
   t.after(async () => {
@@ -63,6 +52,17 @@ test('MCP tools and TrueForge manifest enforce the vertical-slice contract', asy
     delete process.env.ALOHALIVE_DATA_DIR;
     rmSync(testDataDir, { recursive: true, force: true });
   });
+
+  const [server, store, { ingestOnce }, introductions, trueforge, matcher, mcp] = await Promise.all([
+    import('../src/server.js'),
+    import('../src/store.js'),
+    import('../src/ingest.js'),
+    import('../src/introductions.js'),
+    import('../src/trueforge.js'),
+    import('../src/matcher.js'),
+    import('../src/mcp.js'),
+  ]);
+  const { createServer } = server;
 
   store.seedIfEmpty(path.join(HARNESS_DIR, 'fixtures', 'seed.json'));
   ingestOnce();
@@ -96,6 +96,29 @@ test('MCP tools and TrueForge manifest enforce the vertical-slice contract', asy
   assert.equal(mcp.isLoopbackAddress('127.0.0.1'), true);
   assert.equal(mcp.isLoopbackAddress('::ffff:127.0.0.1'), true);
   assert.equal(mcp.isLoopbackAddress('192.168.1.50'), false);
+
+  let remoteStatus = null;
+  let remoteBody = null;
+  let remoteNextCalled = false;
+  server.requireLoopback(
+    { socket: { remoteAddress: '192.168.1.50' } },
+    {
+      status(code) {
+        remoteStatus = code;
+        return this;
+      },
+      json(body) {
+        remoteBody = body;
+        return body;
+      },
+    },
+    () => {
+      remoteNextCalled = true;
+    },
+  );
+  assert.equal(remoteStatus, 403);
+  assert.deepEqual(remoteBody, { error: 'agent API is loopback-only' });
+  assert.equal(remoteNextCalled, false);
 
   assert.throws(
     () => introductions.requestIntroduction({

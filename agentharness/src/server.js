@@ -3,7 +3,7 @@ import cors from 'cors';
 import { load, insert, counts } from './store.js';
 import { rankMatch } from './matcher.js';
 import { ingestOnce } from './ingest.js';
-import { handleMcpRequest } from './mcp.js';
+import { handleMcpRequest, isLoopbackAddress } from './mcp.js';
 import {
   createAlohaSession,
   getAlohaSessionState,
@@ -16,6 +16,13 @@ function asyncRoute(handler) {
   return (req, res, next) => {
     Promise.resolve(handler(req, res, next)).catch(next);
   };
+}
+
+export function requireLoopback(req, res, next) {
+  if (!isLoopbackAddress(req.socket?.remoteAddress)) {
+    return res.status(403).json({ error: 'agent API is loopback-only' });
+  }
+  return next();
 }
 
 export function createServer() {
@@ -84,6 +91,8 @@ export function createServer() {
   });
   app.get('/api/matches', (_req, res) => res.json(load('matches')));
   app.post('/api/ingest', (_req, res) => res.json(ingestOnce()));
+
+  app.use('/api/agent', requireLoopback);
 
   app.post('/api/agent/sessions', asyncRoute(async (req, res) => {
     const { visitorId } = req.body ?? {};

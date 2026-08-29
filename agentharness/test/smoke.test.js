@@ -8,16 +8,10 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const HARNESS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const testDataDir = mkdtempSync(path.join(os.tmpdir(), 'alohalive-harness-test-'));
-process.env.ALOHALIVE_DATA_DIR = testDataDir;
-
-const [{ seedIfEmpty }, { ingestOnce }, { createServer }] = await Promise.all([
-  import('../src/store.js'),
-  import('../src/ingest.js'),
-  import('../src/server.js'),
-]);
 
 test('seed → ingest → visitor signup → match', async (t) => {
+  const testDataDir = mkdtempSync(path.join(os.tmpdir(), 'alohalive-harness-test-'));
+  process.env.ALOHALIVE_DATA_DIR = testDataDir;
   let server;
   t.after(async () => {
     if (server?.listening) {
@@ -28,6 +22,12 @@ test('seed → ingest → visitor signup → match', async (t) => {
     delete process.env.ALOHALIVE_DATA_DIR;
     rmSync(testDataDir, { recursive: true, force: true });
   });
+
+  const [{ seedIfEmpty }, { ingestOnce }, { createServer }] = await Promise.all([
+    import('../src/store.js'),
+    import('../src/ingest.js'),
+    import('../src/server.js'),
+  ]);
 
   seedIfEmpty(path.join(HARNESS_DIR, 'fixtures', 'seed.json'));
   const { status } = ingestOnce();
