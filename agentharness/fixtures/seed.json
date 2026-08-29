@@ -16,6 +16,15 @@
       ]
     },
     {
+      "name": "Hua Momona Farms",
+      "causeTags": ["food-security", "farming", "wildfire-recovery"],
+      "needs": ["meal-program donations", "farm volunteers", "dinner bookings"],
+      "website": "https://www.huamomonafarms.com/",
+      "experiences": [
+        { "title": "Plated dinner for up to 40 guests by celebrity chef Zack Laidlaw", "value": 5000, "minDonation": 100 }
+      ]
+    },
+    {
       "name": "Maui Humane Society",
       "causeTags": ["animals", "family"],
       "needs": ["Beach Buddies volunteers", "foster homes", "pet food"],
@@ -83,6 +92,7 @@
     { "local": "Keoni", "nonprofit": "Surfrider Foundation Maui", "verdict": "helping_now" },
     { "local": "Keoni", "nonprofit": "Hawaiʻi Wildlife Fund", "verdict": "helping_now" },
     { "local": "Leilani", "nonprofit": "Treecovery Hawaiʻi", "verdict": "helping_now" },
+    { "local": "Makoa", "nonprofit": "Hua Momona Farms", "verdict": "helping_now" },
     { "local": "Leilani", "nonprofit": "Maui Cultural Lands", "verdict": "helping_now" },
     { "local": "Makoa", "nonprofit": "Maui Food Bank", "verdict": "helping_now" },
     { "local": "Makoa", "nonprofit": "Kīpuka Olowalu", "verdict": "generally_helping" },

@@ -19,6 +19,21 @@ export const FEATURED_NONPROFITS = [
     video: 'https://buzz.masky.ai/media/261afba7315d6687757a6601c9d55643b14c91790b6702d240d2d9110f5402b4.mp4',
   },
   {
+    id: 'hua-momona',
+    name: 'Hua Momona Farms',
+    tagline: '100,000+ hot meals for Lāhainā fire survivors',
+    blurb:
+      'Born of the Grube family’s farming heritage and love for Hawaiʻi, the Hua Momona Foundation has proudly served over 100,000 hot meals to those impacted by the August 8, 2023 Lāhainā fires — and hosts plated farm dinners by celebrity chef Zack Laidlaw.',
+    causeTags: ['food-security', 'farming', 'wildfire-recovery'],
+    website: 'https://www.huamomonafarms.com/',
+    experience: 'Plated dinner for your group of up to 40 by celebrity chef Zack Laidlaw',
+    emoji: '🥬',
+    grad: ['#7cb342', '#1c7c54'],
+    image: 'https://buzz.masky.ai/media/788ab71cc91c09799d25f468f5a59f65aa7c4fc21ed3e7d7fdc359c08ae0682d.png',
+    // Founder avatar explainer (Masky render of Gary Grube, hosted on buzz media)
+    video: 'https://buzz.masky.ai/media/a5d3970b0fab0a3cd837734f23917b4471fb8aac42628864b6d191eb755122c7.mp4',
+  },
+  {
     id: 'maui-humane',
     name: 'Maui Humane Society',
     tagline: 'Beach days for shelter dogs',
