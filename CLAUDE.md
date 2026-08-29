@@ -14,13 +14,13 @@ Monorepo: `/www` (Vite React site), `/app` (Expo RN app), `/agentharness` (Node 
 - Keep the matcher deterministic and testable; LLM/agent logic goes behind the TrueForge harness boundary in `/agentharness`, not in the clients.
 - Update the "Qodo Code Review Evidence" table in README.md when a PR merges.
 
-## Auth & verification (Firebase)
+## Auth, verification & donations (AWS)
 
-Google sign-in + nonprofit/local verification live in the ContingentX Firebase
-project (`contingentx-b0eab`): named Firestore db `alohalive`, storage bucket
-`contingentx-alohalive`. Full layout, data model, and the storage-rules deploy
-warning: `infra/README-firebase.md`. Deploy rules with
-`firebase deploy --only firestore:rules,storage --project contingentx-b0eab`.
+All app data is in AWS: DynamoDB table `alohalive`, S3 verify-uploads bucket,
+SES domain-proof codes, Stripe donations — served by the Lambda API in
+`infra/donations/` (stack `alohalive-donations`, deployed by `infra/deploy.sh`).
+Firebase is used only as the Google sign-in door (ID tokens verified in the
+Lambda). Full architecture + endpoint list: `infra/README-aws-auth.md`.
 
 ## Bright Data scraper settings (Maui Needs Index)
 

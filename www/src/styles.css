@@ -55,6 +55,18 @@ input, select {
 }
 .badge-ok { background: #dcefe4; color: var(--palm); }
 
+.wheel-card { border: 2px solid var(--coral); }
+.wheel {
+  width: 140px; height: 140px; border-radius: 50%; margin: 12px auto;
+  border: 6px solid var(--ocean-deep);
+  background: conic-gradient(var(--coral) 0 60deg, var(--sand) 60deg 120deg, var(--palm) 120deg 180deg,
+    var(--ocean) 180deg 240deg, #ffd166 240deg 300deg, var(--ocean-deep) 300deg 360deg);
+}
+.wheel-spin { animation: wheel-spin 2.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+@keyframes wheel-spin { to { transform: rotate(1470deg); } }
+.field-row { display: flex; gap: 8px; }
+.field-row input { min-width: 0; }
+
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .chip {
   border: 1px solid #c6d8e2; background: white; border-radius: 999px;

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
 import { AuthProvider } from './auth.jsx';
-import { AuthButton, DomainProofGate, LocalVerifyCard, NpoVerifyCard } from './Verify.jsx';
+import { AuthButton, LocalVerifyCard, NpoVerifyCard } from './Verify.jsx';
+import { DonationWheel, ExperienceManager } from './Wheel.jsx';
 
 const INTEREST_OPTIONS = [
   'ocean', 'diving', 'hiking', 'wildlife', 'photography', 'farming',
@@ -61,9 +62,18 @@ function VisitorTab() {
     }
   };
 
-  if (match) return <MatchCard match={match} />;
+  if (match) {
+    return (
+      <div>
+        <MatchCard match={match} />
+        <DonationWheel />
+      </div>
+    );
+  }
 
   return (
+    <div>
+    <DonationWheel />
     <form className="card" onSubmit={submit}>
       <h3>What brought you to Maui?</h3>
       <input placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} required />
@@ -74,6 +84,7 @@ function VisitorTab() {
       </button>
       {error && <p className="error">{error}</p>}
     </form>
+    </div>
   );
 }
 
@@ -178,6 +189,7 @@ function NonprofitTab() {
     return (
       <div>
         <NpoVerifyCard />
+        <ExperienceManager />
         <div className="card"><h3>Mahalo! {form.name} is listed — locals can now endorse you.</h3></div>
       </div>
     );
@@ -186,6 +198,7 @@ function NonprofitTab() {
   return (
     <div>
     <NpoVerifyCard />
+    <ExperienceManager />
     <form className="card" onSubmit={submit}>
       <h3>List your cause</h3>
       <input placeholder="Organization name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
@@ -238,7 +251,6 @@ export default function App() {
   const [tab, setTab] = useState('visitor');
   return (
     <AuthProvider>
-    <DomainProofGate>
     <div className="page">
       <header>
         <div className="header-row">
@@ -259,7 +271,6 @@ export default function App() {
         <p>The Aloha Circle · Kahului Airport (OGG) · <a href="https://alohalive.net">alohalive.net</a></p>
       </footer>
     </div>
-    </DomainProofGate>
     </AuthProvider>
   );
 }

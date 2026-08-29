@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useAuth, emailDomain, normalizeDomain, pendingDomainProof, completeDomainProof } from './auth.jsx';
+import { useState } from 'react';
+import { useAuth, emailDomain, normalizeDomain } from './auth.jsx';
 import { AIRPORTS } from './firebase.js';
 
 export function AuthButton() {
@@ -60,7 +60,7 @@ export function LocalVerifyCard() {
   if (!user) return <SignInPrompt>Get verified as a Maui local</SignInPrompt>;
 
   const v = profile?.verification;
-  if (v?.status === 'verified') {
+  if (profile?.role === 'local' && v?.status === 'verified') {
     return <div className="card"><h3>✓ You're a verified local</h3><p className="hint">Your endorsements now carry verified weight.</p></div>;
   }
   if (v?.status === 'pending' && v.method === 'bill-photo') {
@@ -88,7 +88,7 @@ export function LocalVerifyCard() {
         {AIRPORTS.map((a) => <option key={a.code} value={a.code}>{a.name} ({a.code})</option>)}
       </select>
       <p className="hint">
-        Upload a photo of a utility bill or similar document showing your name and a {airport === 'OGG' ? 'Maui' : 'local'} address.
+        Upload a photo of a utility bill or similar document showing your name and a Maui address.
         It's only used for residency review, never shown publicly.
       </p>
       <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} required />
@@ -99,14 +99,15 @@ export function LocalVerifyCard() {
 }
 
 // Nonprofits: claim your domain. If your Google account is on that domain
-// you're verified instantly; otherwise we email a proof link to an inbox
+// you're verified instantly; otherwise we email a 6-digit code to an inbox
 // at the domain.
 export function NpoVerifyCard() {
-  const { user, profile, ready, claimNpoDomain, sendDomainProofLink } = useAuth();
+  const { user, profile, ready, claimNpoDomain, sendDomainCode, verifyDomainCode } = useAuth();
   const [orgName, setOrgName] = useState('');
   const [domain, setDomain] = useState('');
   const [proofEmail, setProofEmail] = useState('');
-  const [stage, setStage] = useState('claim'); // claim | needs-email-proof | link-sent
+  const [code, setCode] = useState('');
+  const [stage, setStage] = useState(null); // null | 'needs-email-proof' | 'code-sent'
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -118,67 +119,63 @@ export function NpoVerifyCard() {
     return (
       <div className="card">
         <h3>✓ {profile.orgName || profile.domain} is verified</h3>
-        <p className="hint">Verified via {v.method === 'google-domain' ? 'your Google Workspace domain' : `email proof to ${v.proofEmail}`}.</p>
+        <p className="hint">Verified via {v.method === 'google-domain' ? 'your Google Workspace domain' : `email code to ${v.proofEmail}`}.</p>
       </div>
     );
   }
 
-  const claimedDomain = normalizeDomain(domain || profile?.domain || '');
+  const claimedDomain = normalizeDomain(domain) || profile?.domain || '';
+  const effectiveStage = stage ?? (profile?.role === 'nonprofit' && v?.status === 'pending' && v.method === 'email-code' ? 'code-sent' : profile?.role === 'nonprofit' && profile?.domain ? 'needs-email-proof' : null);
 
-  const claim = async (e) => {
+  const wrap = (fn) => async (e) => {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    try {
-      const result = await claimNpoDomain(domain, orgName);
-      if (result === 'needs-email-proof') setStage('needs-email-proof');
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
+    try { await fn(); } catch (err) { setError(err.message); } finally { setBusy(false); }
   };
 
-  const sendLink = async (e) => {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      await sendDomainProofLink(proofEmail.trim(), claimedDomain);
-      setStage('link-sent');
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const claim = wrap(async () => {
+    const result = await claimNpoDomain(domain, orgName);
+    setStage(result === 'verified' ? null : 'needs-email-proof');
+  });
+  const sendCode = wrap(async () => {
+    await sendDomainCode(proofEmail.trim().toLowerCase());
+    setStage('code-sent');
+  });
+  const checkCode = wrap(async () => {
+    await verifyDomainCode(code);
+    setStage(null);
+  });
 
-  if (stage === 'link-sent' || (v?.status === 'pending' && v.method === 'email-link' && stage === 'claim')) {
+  if (effectiveStage === 'code-sent') {
     return (
-      <div className="card">
-        <h3>⏳ Check {v?.proofEmail || proofEmail}</h3>
-        <p className="hint">Open the sign-in link we emailed — in this browser — to prove you control the domain. Then sign back in with Google.</p>
-      </div>
+      <form className="card" onSubmit={checkCode}>
+        <h3>Enter the code we emailed {v?.proofEmail || proofEmail}</h3>
+        <input
+          inputMode="numeric" autoComplete="one-time-code" placeholder="6-digit code"
+          value={code} onChange={(e) => setCode(e.target.value)} required
+        />
+        <button className="cta" disabled={busy || code.trim().length !== 6}>{busy ? 'Checking…' : 'Verify'}</button>
+        <button type="button" className="link-btn" onClick={() => setStage('needs-email-proof')}>Send a new code</button>
+        {error && <p className="error">{error}</p>}
+      </form>
     );
   }
 
-  if (stage === 'needs-email-proof') {
+  if (effectiveStage === 'needs-email-proof') {
     return (
-      <form className="card" onSubmit={sendLink}>
+      <form className="card" onSubmit={sendCode}>
         <h3>Prove you're part of {claimedDomain}</h3>
         <p className="hint">
-          Your Google account ({user.email}) isn't on {claimedDomain}, so we'll email a verification link to an
-          address at that domain.
+          Your Google account ({user.email}) isn't on {claimedDomain}, so we'll email a verification
+          code to an address at that domain.
         </p>
         <input
-          type="email"
-          placeholder={`you@${claimedDomain}`}
-          value={proofEmail}
-          onChange={(e) => setProofEmail(e.target.value)}
-          required
+          type="email" placeholder={`you@${claimedDomain}`} value={proofEmail}
+          onChange={(e) => setProofEmail(e.target.value)} required
         />
         <button className="cta" disabled={busy || emailDomain(proofEmail.trim()) !== claimedDomain}>
-          {busy ? 'Sending…' : 'Send verification link'}
+          {busy ? 'Sending…' : 'Email me a code'}
         </button>
         {error && <p className="error">{error}</p>}
       </form>
@@ -192,49 +189,12 @@ export function NpoVerifyCard() {
       <input placeholder="Your website domain (mauireef.org)" value={domain} onChange={(e) => setDomain(e.target.value)} required />
       <p className="hint">
         Signed in as {user.email}
-        {emailDomain(user.email) === claimedDomain && claimedDomain
+        {normalizeDomain(domain) && emailDomain(user.email) === normalizeDomain(domain)
           ? ' — that matches your domain, so you\'ll be verified instantly.'
-          : claimedDomain ? ` — we'll ask for an @${claimedDomain} inbox to confirm.` : '.'}
+          : normalizeDomain(domain) ? ` — we'll email a code to an @${normalizeDomain(domain)} inbox to confirm.` : '.'}
       </p>
-      <button className="cta" disabled={busy || !orgName || !claimedDomain}>{busy ? 'Checking…' : 'Claim domain'}</button>
+      <button className="cta" disabled={busy || !orgName || !normalizeDomain(domain)}>{busy ? 'Checking…' : 'Claim domain'}</button>
       {error && <p className="error">{error}</p>}
     </form>
-  );
-}
-
-// Full-screen takeover when the page is opened from a domain-proof email link.
-export function DomainProofGate({ children }) {
-  const [state, setState] = useState(() => (pendingDomainProof() !== null || window.location.search.includes('domainProof=1')) ? 'working' : 'idle');
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    if (state !== 'working') return;
-    completeDomainProof(pendingDomainProof())
-      .then((domain) => { setResult(domain); setState('done'); })
-      .catch((err) => { setError(err.message); setState('failed'); });
-  }, []);
-
-  if (state === 'idle') return children;
-  if (state === 'working') return <div className="page"><div className="card"><h3>Verifying your domain…</h3></div></div>;
-  if (state === 'done') {
-    return (
-      <div className="page">
-        <div className="card">
-          <h3>✓ {result} verified</h3>
-          <p className="hint">Domain proof recorded. Sign back in with Google to continue as your nonprofit.</p>
-          <button className="cta" onClick={() => { window.location.href = window.location.origin; }}>Continue</button>
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div className="page">
-      <div className="card">
-        <h3>Verification failed</h3>
-        <p className="error">{error}</p>
-        <button className="cta" onClick={() => { window.location.href = window.location.origin; }}>Back to AlohaLive</button>
-      </div>
-    </div>
   );
 }
