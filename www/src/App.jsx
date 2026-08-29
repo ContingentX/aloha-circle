@@ -211,6 +211,8 @@ function NonprofitTab() {
   );
 }
 
+const clampUrgency = (u) => Math.min(5, Math.max(1, Number.isFinite(Number(u)) ? Math.round(Number(u)) : 1));
+
 function NeedsTab() {
   const [causes, setCauses] = useState([]);
   const [error, setError] = useState(null);
@@ -228,11 +230,11 @@ function NeedsTab() {
       {error && <p className="error">{error}</p>}
       {causes.map((c) => (
         <div key={c.id} className="cause-row">
-          <div className="urgency" title={`urgency ${c.urgency}/5`}>{'●'.repeat(c.urgency ?? 1)}</div>
+          <div className="urgency" title={`urgency ${clampUrgency(c.urgency)}/5`}>{'●'.repeat(clampUrgency(c.urgency))}</div>
           <div>
             <strong>{c.title}</strong>
             <p className="hint">{c.summary}</p>
-            <p className="tags">{(c.causeTags ?? []).map((t) => `#${t}`).join(' ')}</p>
+            <p className="tags">{(Array.isArray(c.causeTags) ? c.causeTags : []).map((t) => `#${t}`).join(' ')}</p>
           </div>
         </div>
       ))}
