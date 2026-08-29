@@ -14,6 +14,14 @@ Monorepo: `/www` (Vite React site), `/app` (Expo RN app), `/agentharness` (Node 
 - Keep the matcher deterministic and testable; LLM/agent logic goes behind the TrueForge harness boundary in `/agentharness`, not in the clients.
 - Update the "Qodo Code Review Evidence" table in README.md when a PR merges.
 
+## Auth, verification & donations (AWS)
+
+All app data is in AWS: DynamoDB table `alohalive`, S3 verify-uploads bucket,
+SES domain-proof codes, Stripe donations — served by the Lambda API in
+`infra/donations/` (stack `alohalive-donations`, deployed by `infra/deploy.sh`).
+Firebase is used only as the Google sign-in door (ID tokens verified in the
+Lambda). Full architecture + endpoint list: `infra/README-aws-auth.md`.
+
 ## Bright Data scraper settings (Maui Needs Index)
 
 Scraper configuration is version-controlled in `agentharness/src/sources.json` — one entry per source:
