@@ -1,6 +1,6 @@
 // In dev, Vite proxies /api to the agentharness on :8787.
 // In prod (S3 static site), set VITE_API_BASE at build time.
-const BASE = import.meta.env.VITE_API_BASE ?? '';
+const BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/+$/, '');
 
 async function request(path, options) {
   const res = await fetch(`${BASE}${path}`, options);

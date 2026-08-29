@@ -38,12 +38,26 @@ aws cloudformation deploy \
 
 echo "==> [$ENV] Uploading donations Lambda code"
 DONATIONS_ZIP="$(mktemp -t donations-XXXXXX).zip"
-(cd "$ROOT/infra/donations" && zip -q -j "$DONATIONS_ZIP" index.mjs)
+(cd "$ROOT/infra/donations" && zip -q -j "$DONATIONS_ZIP" index.mjs agent-api.mjs)
 aws lambda update-function-code \
   --function-name alohalive-donations \
   --zip-file "fileb://$DONATIONS_ZIP" \
   --region "$REGION" >/dev/null
 rm -f "$DONATIONS_ZIP"
+
+echo "==> [$ENV] Waiting for Lambda update"
+aws lambda wait function-updated \
+  --function-name alohalive-donations \
+  --region "$REGION"
+
+API_ENDPOINT="$(aws cloudformation describe-stacks \
+  --stack-name alohalive-donations \
+  --region "$REGION" \
+  --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
+  --output text)"
+echo "==> [$ENV] Smoke-checking public agent API"
+curl --fail --silent --show-error "$API_ENDPOINT/api/causes" >/dev/null
+curl --fail --silent --show-error "$API_ENDPOINT/api/nonprofits" >/dev/null
 
 echo "==> [$ENV] Outputs"
 aws cloudformation describe-stacks --stack-name "${PROJECT}-site-${ENV}" --region "$REGION" \

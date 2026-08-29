@@ -10,18 +10,28 @@ Google. (Swapping to Cognito later only changes the token issuer check.)
 | Piece | Where |
 |---|---|
 | API | Lambda `alohalive-donations` behind API Gateway HTTP API (`alohalive-api`), stack `alohalive-donations`, code `infra/donations/index.mjs` |
-| Data | DynamoDB table `alohalive` (single-table: `USER#uid/PROFILE`, `USER#uid/CODE`, `EXP#id/META`, `DON#sessionId/META`, `CNT#expId/period`) |
+| Data | DynamoDB table `alohalive` (single-table: `USER#uid/PROFILE`, `USER#uid/CODE`, `EXP#id/META`, `DON#sessionId/META`, `CNT#expId/period`, `AGENT#collection/ITEM#id`) |
 | Residency uploads | S3 `alohalive-verify-<account>` (private; presigned PUT from `/local/submit`) |
 | Domain-proof email | SES from `verify@alohalive.net` (identity + DKIM in Route 53; account has production access) |
 | Stripe | secret key in SSM `/alohalive/prod/STRIPE_SECRET_KEY` (**live key** — real charges) |
 
 Function URLs are blocked account-wide (org policy) — that's why API Gateway.
+Dev and production currently share this API stack and DynamoDB table. Their
+workflows use one concurrency lane so they cannot update the Lambda at the same
+time; separating backend data by environment remains future infrastructure work.
 
 ## Endpoints
 
 Public: `GET /experiences`, `POST /donate {experienceId, amountUsd}`,
 `GET /spin?session_id=cs_...` (idempotent, server-side prize draw against
-per-day/per-month caps, HST dates).
+per-day/per-month caps, HST dates), `GET /api/causes`,
+`GET|POST /api/nonprofits`, `POST /api/visitors`, `POST /api/locals`, and
+`POST /api/endorsements`. The `/api/*` routes preserve the local agentharness
+JSON contract, serve deterministic starter data immediately, and persist new
+records in DynamoDB. Anonymous local registrations and endorsements are stored
+as unverified pending input; only verified seed/community records influence
+visitor matches or public trust counts. Visitor/match records expire after 30
+days, pending community submissions after 180 days, via DynamoDB TTL.
 Authed (`Authorization: Bearer <Firebase ID token>`): `GET /me`,
 `POST /profile`, `POST /npo/claim`, `POST /npo/send-code`,
 `POST /npo/verify-code`, `POST /local/submit`, `POST /experiences`
@@ -40,7 +50,8 @@ Authed (`Authorization: Bearer <Firebase ID token>`): `GET /me`,
 
 `infra/deploy.sh <dev|prod>` deploys the site stack, the `alohalive-donations`
 stack, and uploads the Lambda code. Frontend picks the API endpoint from
-`VITE_API` (defaults to the deployed endpoint in `www/src/appApi.js`).
+`VITE_API_BASE`; `infra/deploy-web.sh` resolves it from the API stack output
+automatically unless an explicit environment override is supplied.
 
 ## Reviewing local (bill-photo) verifications
 

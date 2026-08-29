@@ -40,7 +40,7 @@ Day-to-day work happens on **`dev`** (the default branch); **`production`** is t
 | `dev` | [deploy-dev.yml](.github/workflows/deploy-dev.yml) | https://dev.alohalive.net |
 | `production` | [deploy-prod.yml](.github/workflows/deploy-prod.yml) | https://alohalive.net (www redirects to apex) |
 
-Each deploy re-applies [`infra/site.yaml`](infra/site.yaml) (S3 + CloudFront + ACM + Route53 per environment) then builds `www` and syncs it to the environment's bucket with a CloudFront invalidation (`infra/deploy.sh` + `infra/deploy-web.sh`). The one-time OIDC role lives in [`infra/cicd.yaml`](infra/cicd.yaml) (stack `alohalive-cicd`). Set the repo variables `VITE_API_BASE_DEV` / `VITE_API_BASE_PROD` once the agent harness is hosted so the static site can reach the API.
+Each deploy re-applies [`infra/site.yaml`](infra/site.yaml) (S3 + CloudFront + ACM + Route53 per environment), deploys the shared Lambda/API Gateway backend, then builds `www` and syncs it to the environment's bucket with a CloudFront invalidation (`infra/deploy.sh` + `infra/deploy-web.sh`). The web deploy discovers the API endpoint from the stack automatically; `VITE_API_BASE_DEV` / `VITE_API_BASE_PROD` remain optional overrides. The one-time OIDC role lives in [`infra/cicd.yaml`](infra/cicd.yaml) (stack `alohalive-cicd`).
 
 Release flow: PR feature → `dev` (auto-deploys dev site) → PR `dev` → `production` (auto-deploys live site).
 
