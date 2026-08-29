@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Seed the alohalive DynamoDB table with the demo data plane (nonprofits,
-# causes, locals, endorsements) from infra/fixtures/demo-data.json.
+# causes, locals, endorsements, wheel experiences) from infra/fixtures/demo-data.json.
 # Idempotent: items are keyed by fixture slug, so re-runs overwrite in place.
 # The Aloha agent later writes the same item shapes to replace this data.
 #   usage: ./infra/seed-demo-data.sh [table]   (default: alohalive)
@@ -36,6 +36,8 @@ for l in data['locals']:
     add('LOCAL', l['slug'], {k: v for k, v in l.items() if k != 'slug'})
 for e in data['endorsements']:
     add('ENDORSE', e['slug'], {k: v for k, v in e.items() if k != 'slug'})
+for x in data.get('experiences', []):
+    add('EXP', x['slug'], {**{k: v for k, v in x.items() if k != 'slug'}, 'npoUid': 'seed', 'active': True})
 
 for i in range(0, len(items), 25):
     chunk = {sys.argv[2]: [{'PutRequest': {'Item': it}} for it in items[i:i+25]]}

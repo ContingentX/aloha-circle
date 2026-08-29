@@ -366,5 +366,107 @@
       "nonprofit": "Habitat for Humanity Maui",
       "verdict": "generally_helping"
     }
+  ],
+  "experiences": [
+    {
+      "slug": "hua-momona-chef-dinner",
+      "npoSlug": "hua-momona",
+      "title": "Plated dinner for two + meet & greet with celebrity chef Zack Laidlaw",
+      "description": "Farm-to-table plated dinner for two at Hua Momona Farms in Kula, with a personal meet & greet with chef Zack Laidlaw.",
+      "value": 500,
+      "minDonation": 50,
+      "perDay": 1,
+      "perMonth": 2
+    },
+    {
+      "slug": "treecovery-planting-day",
+      "npoSlug": "treecovery",
+      "title": "Tree-planting day in Lāhainā with founder Duane Sparkman",
+      "description": "Spend a morning replanting fire-scarred Lāhainā alongside Treecovery founder Duane Sparkman.",
+      "value": 250,
+      "minDonation": 25,
+      "perDay": 1,
+      "perMonth": 10
+    },
+    {
+      "slug": "habitat-rebuild-day",
+      "npoSlug": "habitat-maui",
+      "title": "Lāhainā rebuild construction day (tools provided)",
+      "description": "Swing a hammer on a real Habitat for Humanity Maui rebuild site — tools and training provided.",
+      "value": 180,
+      "minDonation": 20,
+      "perDay": 1,
+      "perMonth": 10
+    },
+    {
+      "slug": "hwf-turtle-patrol",
+      "npoSlug": "hawaii-wildlife-fund",
+      "title": "Dawn sea-turtle patrol for two with a field biologist",
+      "description": "Walk a nesting beach at dawn with a Hawaiʻi Wildlife Fund field biologist, checking on honu nests.",
+      "value": 150,
+      "minDonation": 20,
+      "perDay": 1,
+      "perMonth": 10
+    },
+    {
+      "slug": "mcl-honokowai-hike",
+      "npoSlug": "maui-cultural-lands",
+      "title": "Honokōwai Valley hike + cultural site restoration",
+      "description": "Guided hike into Honokōwai Valley with Maui Cultural Lands, helping restore ancient Hawaiian sites.",
+      "value": 130,
+      "minDonation": 15,
+      "perDay": 1,
+      "perMonth": 10
+    },
+    {
+      "slug": "kipuka-loi-restoration",
+      "npoSlug": "kipuka-olowalu",
+      "title": "Loʻi kalo (taro patch) restoration morning + valley tour",
+      "description": "Work the loʻi kalo with Kīpuka Olowalu stewards, then tour the Olowalu valley.",
+      "value": 120,
+      "minDonation": 15,
+      "perDay": 1,
+      "perMonth": 10
+    },
+    {
+      "slug": "treecovery-adopt-tree",
+      "npoSlug": "treecovery",
+      "title": "Adopt a nursery tree for a fire-survivor family",
+      "description": "Your name on a nursery tree that Treecovery delivers to a Lāhainā fire-survivor family's rebuilt home.",
+      "value": 75,
+      "minDonation": 10,
+      "perDay": 1,
+      "perMonth": 10
+    },
+    {
+      "slug": "food-bank-packing",
+      "npoSlug": "maui-food-bank",
+      "title": "Family food-box packing shift with local volunteers",
+      "description": "Join a Maui Food Bank packing line and send a pallet of food boxes out with your name on it.",
+      "value": 60,
+      "minDonation": 10,
+      "perDay": 1,
+      "perMonth": 10
+    },
+    {
+      "slug": "humane-beach-buddies",
+      "npoSlug": "maui-humane",
+      "title": "Beach Buddies morning with a shelter dog",
+      "description": "Check a shelter dog out of Maui Humane Society for a beach morning it will never forget.",
+      "value": 50,
+      "minDonation": 10,
+      "perDay": 1,
+      "perMonth": 10
+    },
+    {
+      "slug": "surfrider-sunrise-cleanup",
+      "npoSlug": "surfrider-maui",
+      "title": "Sunrise beach cleanup + reef-safe sunscreen talk-story",
+      "description": "Sunrise cleanup with Surfrider Maui volunteers, plus a reef-safe sunscreen talk-story session.",
+      "value": 40,
+      "minDonation": 5,
+      "perDay": 1,
+      "perMonth": 10
+    }
   ]
 }
