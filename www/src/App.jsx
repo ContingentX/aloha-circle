@@ -84,7 +84,9 @@ function LocalTab() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    api.get('/api/nonprofits').then(setNonprofits).catch((e) => setError(e.message));
+    api.get('/api/nonprofits')
+      .then((list) => setNonprofits(Array.isArray(list) ? list : []))
+      .catch((e) => setError(e.message));
   }, []);
 
   const toggle = (tag) =>
@@ -105,7 +107,8 @@ function LocalTab() {
     setError(null);
     try {
       await api.post('/api/endorsements', { local: name || 'anonymous local', nonprofit: nonprofit.name, verdict });
-      setNonprofits(await api.get('/api/nonprofits'));
+      const list = await api.get('/api/nonprofits');
+      setNonprofits(Array.isArray(list) ? list : []);
     } catch (err) {
       setError(err.message);
     }
@@ -187,7 +190,9 @@ function NeedsTab() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    api.get('/api/causes').then(setCauses).catch((e) => setError(e.message));
+    api.get('/api/causes')
+      .then((list) => setCauses(Array.isArray(list) ? list : []))
+      .catch((e) => setError(e.message));
   }, []);
 
   return (
