@@ -33,8 +33,9 @@ documented at the top of the "public data plane" section in
 The Aloha agent updates the site by writing those same DynamoDB items.
 Authed (`Authorization: Bearer <Firebase ID token>`): `GET /me`,
 `POST /profile`, `POST /npo/claim`, `POST /npo/send-code`,
-`POST /npo/verify-code`, `POST /local/submit`, `POST /experiences`
-(verified nonprofits only).
+`POST /npo/verify-code`, `POST /local/submit`, `POST /local/confirm`
+(flips the profile to pending after the client's S3 PUT succeeds),
+`POST /experiences` (verified nonprofits only).
 
 ## Verification model
 
@@ -49,7 +50,8 @@ Authed (`Authorization: Bearer <Firebase ID token>`): `GET /me`,
 
 `infra/deploy.sh <dev|prod>` deploys the site stack, the `alohalive-donations`
 stack, and uploads the Lambda code. Frontend picks the API endpoint from
-`VITE_API` (defaults to the deployed endpoint in `www/src/appApi.js`).
+`VITE_API`, then `VITE_API_BASE` (what the deploy workflows set), then the
+deployed-endpoint fallback in `www/src/appApi.js`.
 
 ## Reviewing local (bill-photo) verifications
 

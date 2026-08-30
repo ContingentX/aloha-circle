@@ -13,10 +13,12 @@ import {
 import BoardingPassCard from './BoardingPass.jsx';
 import { styles } from './styles.js';
 
-const API_BASE = 'https://vsrvqrddll.execute-api.us-east-1.amazonaws.com';
+// Both hosts are overridable at build time (EXPO_PUBLIC_* vars are inlined by
+// Expo); production builds set EXPO_PUBLIC_BRIDGE_BASE=https://alohalive.net
+// instead of relying on the dev site.
+const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'https://vsrvqrddll.execute-api.us-east-1.amazonaws.com';
 // The web app that hosts the sign-in and Stripe-return bridge pages.
-// Point at https://alohalive.net for a production build.
-const BRIDGE_BASE = 'https://dev.alohalive.net';
+const BRIDGE_BASE = process.env.EXPO_PUBLIC_BRIDGE_BASE ?? 'https://dev.alohalive.net';
 
 const INTERESTS = ['ocean', 'diving', 'hiking', 'wildlife', 'photography', 'farming', 'cooking', 'community'];
 
@@ -106,7 +108,17 @@ function WheelCard({ token, onAuthExpired }) {
       }).start(resolve),
     );
     try {
-      const [outcome] = await Promise.all([api(`/spin?session_id=${encodeURIComponent(sessionId)}`), wheel]);
+      // {pending:true} means a concurrent request holds the spin claim — poll
+      // a few times before giving up.
+      const spinCall = async () => {
+        for (let attempt = 0; attempt < 10; attempt++) {
+          const outcome = await api(`/spin?session_id=${encodeURIComponent(sessionId)}`);
+          if (!outcome.pending) return outcome;
+          await new Promise((res) => setTimeout(res, 1500));
+        }
+        throw new Error('Your spin is still processing — try again in a moment.');
+      };
+      const [outcome] = await Promise.all([spinCall(), wheel]);
       setResult(outcome);
     } catch (err) {
       setError(String(err.message ?? err));

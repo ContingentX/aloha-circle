@@ -74,14 +74,28 @@ export function DonationWheel() {
   useEffect(() => {
     const sessionId = new URLSearchParams(window.location.search).get('spin');
     if (!sessionId) return;
-    window.history.replaceState(null, '', window.location.pathname);
     setSpinning(true);
     setDuration(2.4);
     setAngle((a) => a + 1440 + Math.floor(Math.random() * 360));
-    appApi.spin(sessionId)
-      .then((r) => setResult(r))
-      .catch((e) => setError(e.message))
-      .finally(() => setTimeout(() => setSpinning(false), 2600));
+    let cancelled = false;
+    // The API answers {pending:true} while a concurrent request holds the spin
+    // claim — poll a few times before giving up.
+    const poll = (attempt) =>
+      appApi.spin(sessionId).then((r) => {
+        if (cancelled) return;
+        if (r.pending) {
+          if (attempt >= 10) throw new Error('Your spin is still processing — refresh to see the result.');
+          return new Promise((res) => setTimeout(res, 1500)).then(() => poll(attempt + 1));
+        }
+        // only forget the session once we have a final result: on failure the
+        // ?spin= param stays in the URL so a refresh retries the paid spin
+        window.history.replaceState(null, '', window.location.pathname);
+        setResult(r);
+      });
+    poll(0)
+      .catch((e) => { if (!cancelled) setError(e.message); })
+      .finally(() => { if (!cancelled) setTimeout(() => setSpinning(false), 2600); });
+    return () => { cancelled = true; };
   }, []);
 
   // attention spins: every few seconds the idle wheel does a lap and eases to

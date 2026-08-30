@@ -3,7 +3,7 @@ import { useAuth, emailDomain, normalizeDomain } from './auth.jsx';
 import { AIRPORTS } from './firebase.js';
 
 export function AuthButton({ onOpenAccount }) {
-  const { user, profile, ready, signInWithGoogle, signOutUser } = useAuth();
+  const { user, profile, ready, profileError, signInWithGoogle, signOutUser } = useAuth();
   const [error, setError] = useState(null);
   if (!ready) return null;
   if (!user) {
@@ -24,6 +24,7 @@ export function AuthButton({ onOpenAccount }) {
       </button>
       <VerifiedBadge verification={profile?.verification} />
       <button className="link-btn" onClick={signOutUser}>Sign out</button>
+      {profileError && <p className="error">{profileError}</p>}
     </div>
   );
 }
