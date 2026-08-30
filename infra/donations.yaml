@@ -146,6 +146,9 @@ Resources:
       ApiId: !Ref HttpApi
       StageName: $default
       AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 40
+        ThrottlingRateLimit: 20
 
   HttpApiPermission:
     Type: AWS::Lambda::Permission

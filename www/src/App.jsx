@@ -99,8 +99,10 @@ function LocalTab() {
   const [town, setTown] = useState('');
   const [interests, setInterests] = useState([]);
   const [done, setDone] = useState(false);
+  const [localId, setLocalId] = useState(null);
   const [nonprofits, setNonprofits] = useState([]);
   const [error, setError] = useState(null);
+  const [notice, setNotice] = useState(null);
 
   useEffect(() => {
     api.get('/api/nonprofits')
@@ -115,7 +117,8 @@ function LocalTab() {
     e.preventDefault();
     setError(null);
     try {
-      await api.post('/api/locals', { name, town, interests, causes: interests });
+      const local = await api.post('/api/locals', { name, town, interests, causes: interests });
+      setLocalId(local.id);
       setDone(true);
     } catch (err) {
       setError(err.message);
@@ -124,8 +127,13 @@ function LocalTab() {
 
   const endorse = async (nonprofit, verdict) => {
     setError(null);
+    setNotice(null);
     try {
-      await api.post('/api/endorsements', { local: name || 'anonymous local', nonprofit: nonprofit.name, verdict });
+      await api.post('/api/endorsements', {
+        local: name || 'anonymous local', localId,
+        nonprofit: nonprofit.name, nonprofitId: nonprofit.id, verdict,
+      });
+      setNotice('Mahalo — your endorsement is pending verification.');
       const list = await api.get('/api/nonprofits');
       setNonprofits(Array.isArray(list) ? list : []);
     } catch (err) {
@@ -146,7 +154,7 @@ function LocalTab() {
           <button className="cta" disabled={!name || interests.length === 0}>Join as a local</button>
         </form>
       ) : (
-        <div className="card"><h3>Mahalo, {name}! You're on the local roster.</h3></div>
+        <div className="card"><h3>Mahalo, {name}! Your local profile is pending verification.</h3></div>
       )}
       <div className="card">
         <h3>Is this helping Maui?</h3>
@@ -166,12 +174,14 @@ function LocalTab() {
           </div>
         ))}
       </div>
+      {notice && <p className="hint">{notice}</p>}
       {error && <p className="error">{error}</p>}
     </div>
   );
 }
 
 function NonprofitTab() {
+  const { user, ready } = useAuth();
   const [form, setForm] = useState({ name: '', website: '', causeTags: '' });
   const [done, setDone] = useState(false);
   const [error, setError] = useState(null);
@@ -191,12 +201,15 @@ function NonprofitTab() {
     }
   };
 
+  if (!ready) return null;
+  if (!user) return <NpoVerifyCard />;
+
   if (done) {
     return (
       <div>
         <NpoVerifyCard />
         <ExperienceManager />
-        <div className="card"><h3>Mahalo! {form.name} is listed — locals can now endorse you.</h3></div>
+        <div className="card"><h3>Mahalo! {form.name} was submitted and is pending verification.</h3></div>
       </div>
     );
   }
@@ -231,8 +244,8 @@ function NeedsTab() {
 
   return (
     <div className="card">
-      <h3>Maui Needs Index — live</h3>
-      <p className="hint">Continuously ingested by the Aloha Agent from local nonprofit boards, news and event pages.</p>
+      <h3>Maui Needs Index — demo data</h3>
+      <p className="hint">Loaded from DynamoDB now; the Aloha Agent will refresh these records from source-backed feeds.</p>
       {error && <p className="error">{error}</p>}
       {causes.map((c) => (
         <div key={c.id} className="cause-row">

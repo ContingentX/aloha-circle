@@ -36,14 +36,105 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_NAMED_IAM \
   --no-fail-on-empty-changeset
 
+echo "==> [$ENV] Ensuring demo data and public-record contract fields"
+AWS_REGION="$REGION" "$ROOT/infra/seed-demo-data.sh" alohalive
+
 echo "==> [$ENV] Uploading donations Lambda code"
-DONATIONS_ZIP="$(mktemp -t donations-XXXXXX).zip"
-(cd "$ROOT/infra/donations" && zip -q -j "$DONATIONS_ZIP" index.mjs)
+DEPLOY_TMP="$(mktemp -d -t alohalive-deploy-XXXXXX)"
+DONATIONS_ZIP="$DEPLOY_TMP/donations.zip"
+PREVIOUS_ZIP="$DEPLOY_TMP/previous.zip"
+HEALTH_JSON="$DEPLOY_TMP/health.json"
+NONPROFITS_JSON="$DEPLOY_TMP/nonprofits.json"
+CAUSES_JSON="$DEPLOY_TMP/causes.json"
+EXPERIENCES_JSON="$DEPLOY_TMP/experiences.json"
+LAMBDA_UPDATED=0
+
+cleanup_deploy() {
+  local status=$?
+  trap - EXIT
+  if [[ "$status" -ne 0 && "$LAMBDA_UPDATED" -eq 1 ]]; then
+    set +e
+    echo "warning: deploy failed after Lambda upload; restoring the previous package" >&2
+    aws lambda update-function-code \
+      --function-name alohalive-donations \
+      --zip-file "fileb://$PREVIOUS_ZIP" \
+      --region "$REGION" >/dev/null
+    local restore_status=$?
+    if [[ "$restore_status" -eq 0 ]]; then
+      aws lambda wait function-updated --function-name alohalive-donations --region "$REGION"
+      restore_status=$?
+    fi
+    if [[ "$restore_status" -ne 0 ]]; then
+      echo "error: automatic Lambda rollback failed; production requires immediate attention" >&2
+    else
+      echo "==> Previous Lambda package restored" >&2
+    fi
+  fi
+  rm -rf "$DEPLOY_TMP"
+  exit "$status"
+}
+trap cleanup_deploy EXIT
+
+PREVIOUS_URL="$(aws lambda get-function \
+  --function-name alohalive-donations \
+  --region "$REGION" \
+  --query 'Code.Location' \
+  --output text)"
+curl --fail --silent --show-error --max-time 90 "$PREVIOUS_URL" --output "$PREVIOUS_ZIP"
+
+"$ROOT/infra/package-donations.sh" "$DONATIONS_ZIP"
+LAMBDA_UPDATED=1
 aws lambda update-function-code \
   --function-name alohalive-donations \
   --zip-file "fileb://$DONATIONS_ZIP" \
   --region "$REGION" >/dev/null
-rm -f "$DONATIONS_ZIP"
+aws lambda wait function-updated \
+  --function-name alohalive-donations \
+  --region "$REGION"
+
+API_ENDPOINT="$(aws cloudformation describe-stacks \
+  --stack-name alohalive-donations \
+  --region "$REGION" \
+  --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
+  --output text)"
+echo "==> [$ENV] Verifying public API at $API_ENDPOINT"
+curl --fail --silent --show-error --retry 5 --retry-all-errors \
+  --max-time 20 "$API_ENDPOINT/api/health" --output "$HEALTH_JSON"
+curl --fail --silent --show-error --retry 5 --retry-all-errors \
+  --max-time 20 "$API_ENDPOINT/api/nonprofits" --output "$NONPROFITS_JSON"
+curl --fail --silent --show-error --retry 5 --retry-all-errors \
+  --max-time 20 "$API_ENDPOINT/api/causes" --output "$CAUSES_JSON"
+curl --fail --silent --show-error --retry 5 --retry-all-errors \
+  --max-time 20 "$API_ENDPOINT/experiences" --output "$EXPERIENCES_JSON"
+python3 - "$HEALTH_JSON" "$NONPROFITS_JSON" "$CAUSES_JSON" "$EXPERIENCES_JSON" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding='utf-8') as handle:
+    body = json.load(handle)
+with open(sys.argv[2], encoding='utf-8') as handle:
+    nonprofits = json.load(handle)
+with open(sys.argv[3], encoding='utf-8') as handle:
+    causes = json.load(handle)
+with open(sys.argv[4], encoding='utf-8') as handle:
+    experiences = json.load(handle).get('experiences', [])
+counts = body.get('counts', {})
+if body.get('ok') is not True:
+    raise SystemExit(f'public API smoke failed: {body}')
+if not isinstance(nonprofits, list) or not nonprofits:
+    raise SystemExit(f'nonprofit API returned no published records: {nonprofits}')
+if not isinstance(causes, list) or not causes:
+    raise SystemExit(f'cause API returned no published records: {causes}')
+required = {'id', 'source', 'url', 'title', 'causeTags', 'urgency', 'summary', 'fetchedAt', 'nonprofit', 'nonprofitId'}
+if any(required - set(cause) for cause in causes):
+    raise SystemExit('cause API returned an incomplete CauseSignal')
+if not isinstance(experiences, list) or len(experiences) < 10:
+    raise SystemExit(f'experience API returned fewer than 10 wheel prizes: {experiences}')
+print(
+    f"API smoke OK: nonprofits={len(nonprofits)} causes={len(causes)} "
+    f"experiences={len(experiences)} raw_counts={counts}"
+)
+PY
 
 echo "==> [$ENV] Outputs"
 aws cloudformation describe-stacks --stack-name "${PROJECT}-site-${ENV}" --region "$REGION" \

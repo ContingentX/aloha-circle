@@ -6,7 +6,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-dev
+  # Match the workflow already on production while both sites share a backend.
+  group: deploy-prod
   cancel-in-progress: false
 
 permissions:
@@ -16,14 +17,26 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Both sites currently use the same environment-scoped API/table settings.
+    environment: production
     env:
       AWS_REGION: us-east-1
-      VITE_API_BASE: ${{ vars.VITE_API_BASE_DEV }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+      - name: Test public API contract
+        run: node --test infra/donations/*.test.mjs
+      - name: Check deploy scripts and Lambda syntax
+        run: |
+          bash -n infra/deploy.sh infra/deploy-web.sh infra/package-donations.sh infra/seed-demo-data.sh
+          node --check infra/donations/index.mjs
+          node --check infra/donations/public-api.mjs
+          SEED_DRY_RUN=1 ./infra/seed-demo-data.sh
+          package_dir="$(mktemp -d)"
+          ./infra/package-donations.sh "$package_dir/donations.zip"
+          rm -rf "$package_dir"
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
