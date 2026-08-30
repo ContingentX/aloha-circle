@@ -28,7 +28,17 @@ echo "==> [$ENV] Building www"
 ( cd "$ROOT/www" && npm ci && npm run build )
 
 echo "==> [$ENV] Syncing to s3://$BUCKET"
-aws s3 sync "$ROOT/www/dist/" "s3://$BUCKET/" --delete
+# Hashed assets are immutable; everything else (index.html, root files) must
+# revalidate — without Cache-Control, browsers heuristically cache index.html
+# and keep serving stale bundles after a deploy.
+aws s3 sync "$ROOT/www/dist/assets/" "s3://$BUCKET/assets/" --delete \
+  --cache-control "public,max-age=31536000,immutable"
+# media/ holds large videos/images uploaded straight to the bucket (not in
+# git, not in the build) — the site references them as /media/<name>; never
+# let the sync delete them.
+aws s3 sync "$ROOT/www/dist/" "s3://$BUCKET/" --delete \
+  --exclude "assets/*" --exclude "media/*" \
+  --cache-control "no-cache"
 
 echo "==> [$ENV] Invalidating CloudFront $DIST_ID"
 aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*" \

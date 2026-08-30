@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
-import { AuthProvider } from './auth.jsx';
+import { AuthProvider, useAuth } from './auth.jsx';
 import { AuthButton, LocalVerifyCard, NpoVerifyCard } from './Verify.jsx';
 import { DonationWheel, ExperienceManager } from './Wheel.jsx';
 import { LiveStrip, CauseScroller } from './Causes.jsx';
 import { AlohaCircle } from './AlohaCircle.jsx';
+import { FEATURED_NONPROFITS } from './nonprofits.js';
 
 const INTEREST_OPTIONS = [
   'ocean', 'diving', 'hiking', 'wildlife', 'photography', 'farming',
@@ -44,38 +45,42 @@ function VisitorTab() {
   const [name, setName] = useState('');
   const [interests, setInterests] = useState([]);
   const [match, setMatch] = useState(null);
-  const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const toggle = (tag) =>
     setInterests((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
 
+  // If the Aloha Agent API is unreachable, never dead-end the flow: match
+  // against the static featured-nonprofits list instead.
+  const fallbackMatch = () => {
+    const np = FEATURED_NONPROFITS.find((n) => n.causeTags.some((t) => interests.includes(t)))
+      ?? FEATURED_NONPROFITS[0];
+    return {
+      localName: 'Leilani', localTown: 'Paia',
+      cause: np.name,
+      why: `You picked ${interests.join(', ')} - ${np.tagline}.`,
+      suggestedAction: np.experience,
+    };
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true);
-    setError(null);
     try {
       const { match } = await api.post('/api/visitors', { name, interests });
       setMatch(match);
-    } catch (err) {
-      setError(err.message);
+    } catch {
+      setMatch(fallbackMatch());
     } finally {
       setBusy(false);
     }
   };
 
   if (match) {
-    return (
-      <div>
-        <MatchCard match={match} />
-        <DonationWheel />
-      </div>
-    );
+    return <MatchCard match={match} />;
   }
 
   return (
-    <div>
-    <DonationWheel />
     <form className="card" onSubmit={submit}>
       <h3>What brought you to Maui?</h3>
       <input placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} required />
@@ -84,9 +89,7 @@ function VisitorTab() {
       <button className="cta" disabled={busy || !name || interests.length === 0}>
         {busy ? 'Matching…' : 'Meet Maui'}
       </button>
-      {error && <p className="error">{error}</p>}
     </form>
-    </div>
   );
 }
 
@@ -251,21 +254,19 @@ const TABS = [
   { id: 'needs', label: 'Live needs', el: <NeedsTab /> },
 ];
 
-export default function App() {
+// Role sections (visitor / local / nonprofit / live needs) live behind the
+// signed-in user chip; closes itself if the user signs out.
+function AccountSection({ onClose }) {
+  const { user, ready } = useAuth();
   const [tab, setTab] = useState('visitor');
+  useEffect(() => { if (ready && !user) onClose(); }, [ready, user]);
+  if (!user) return null;
   return (
-    <AuthProvider>
-    <div className="page">
-      <header>
-        <div className="header-row">
-          <h1>Aloha<span className="accent">Live</span></h1>
-          <AuthButton />
-        </div>
-        <p className="tagline">Don't just visit Maui. <strong>Meet Maui.</strong></p>
-        <LiveStrip />
-      </header>
-      <CauseScroller />
-      <AlohaCircle />
+    <div>
+      <div className="account-head">
+        <h2>Aloha, {user.displayName?.split(' ')[0] ?? 'friend'}</h2>
+        <button className="link-btn" onClick={onClose}>← Back to the site</button>
+      </div>
       <nav>
         {TABS.map((t) => (
           <button key={t.id} className={tab === t.id ? 'tab tab-on' : 'tab'} onClick={() => setTab(t.id)}>
@@ -274,6 +275,35 @@ export default function App() {
         ))}
       </nav>
       <main>{TABS.find((t) => t.id === tab).el}</main>
+    </div>
+  );
+}
+
+export default function App() {
+  const [view, setView] = useState('home'); // 'home' | 'account'
+  return (
+    <AuthProvider>
+    <div className="page">
+      <header>
+        <div className="header-row">
+          <h1>Aloha<span className="accent">Live</span></h1>
+          <AuthButton onOpenAccount={() => setView((v) => (v === 'account' ? 'home' : 'account'))} />
+        </div>
+        <p className="tagline">Don't just visit Maui. <strong>Meet Maui.</strong></p>
+        <LiveStrip />
+      </header>
+      {view === 'account' ? (
+        <AccountSection onClose={() => setView('home')} />
+      ) : (
+        <>
+          <CauseScroller />
+          <AlohaCircle />
+          <main>
+            <DonationWheel />
+            <VisitorTab />
+          </main>
+        </>
+      )}
       <footer>
         <p>The Aloha Circle · Kahului Airport (OGG) · <a href="https://alohalive.net">alohalive.net</a></p>
       </footer>

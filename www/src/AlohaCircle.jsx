@@ -5,7 +5,7 @@
 // (top-right). Portrait 9:16 — display the full frame, never crop, or the
 // avatar overlay gets cut off.
 const CIRCLE_VIDEO =
-  'https://buzz.masky.ai/media/af6317556ffba70e968c6e7672ce2b454b809cf479f56c5f64ce90637e4b1c7f.mp4';
+  '/media/ogg-circle-walkthrough.mp4';
 
 export function AlohaCircle() {
   return (

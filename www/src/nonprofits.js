@@ -14,9 +14,9 @@ export const FEATURED_NONPROFITS = [
     experience: 'Plant a tree in Lāhainā side-by-side with Duane’s crew',
     emoji: '🌳',
     grad: ['#1c7c54', '#0b5d8a'],
-    image: 'https://buzz.masky.ai/media/57e031fea6210ebea0a85d4b4ca98bedb7b4ed5d3687589e7358f94dfcbc5a6e.png',
-    // Founder avatar explainer (Masky render of Duane, hosted on buzz media)
-    video: 'https://buzz.masky.ai/media/261afba7315d6687757a6601c9d55643b14c91790b6702d240d2d9110f5402b4.mp4',
+    image: '/media/treecovery-duane.png',
+    // Founder avatar explainer (Masky render of Duane, in the site bucket /media)
+    video: '/media/treecovery-duane-explainer.mp4',
   },
   {
     id: 'hua-momona',
@@ -29,9 +29,9 @@ export const FEATURED_NONPROFITS = [
     experience: 'Plated dinner for your group of up to 40 by celebrity chef Zack Laidlaw',
     emoji: '🥬',
     grad: ['#7cb342', '#1c7c54'],
-    image: 'https://buzz.masky.ai/media/788ab71cc91c09799d25f468f5a59f65aa7c4fc21ed3e7d7fdc359c08ae0682d.png',
-    // Founder avatar explainer (Masky render of Gary Grube, hosted on buzz media)
-    video: 'https://buzz.masky.ai/media/a5d3970b0fab0a3cd837734f23917b4471fb8aac42628864b6d191eb755122c7.mp4',
+    image: '/media/hua-momona-card.png',
+    // Founder avatar explainer (Masky render of Gary Grube, in the site bucket /media)
+    video: '/media/hua-momona-gary-explainer.mp4',
   },
   {
     id: 'maui-humane',
