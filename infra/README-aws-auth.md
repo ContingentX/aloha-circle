@@ -44,7 +44,8 @@ Authed (`Authorization: Bearer <Firebase ID token>`): `GET /me`,
 `POST /npo/verify-code`, `POST /local/submit`, `POST /experiences`
 (verified nonprofits only), and `POST /api/nonprofits`. Nonprofit listing
 submissions are pending for at most 30 days and are atomically limited to one
-per authenticated account per UTC day before the pending record is written.
+per authenticated account per UTC day by the pending record's conditional
+daily key, so a failed write cannot consume a separate quota slot.
 
 ### Aloha Agent record contract
 

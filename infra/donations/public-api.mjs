@@ -19,7 +19,6 @@ export function createDynamoPublicStore({
   table,
   PutCommand,
   ScanCommand,
-  UpdateCommand,
   randomId,
   now = () => new Date(),
   cacheTtlMs = 3_000,
@@ -136,7 +135,37 @@ export function createDynamoPublicStore({
     return countsInflight;
   }
 
-  async function takeSubmissionSlot(scope, clientKey, { limit = 1, ttlDays = 2 } = {}) {
+  function buildRecord(prefix, fields, { ttlDays, id = randomId(), current = now() } = {}) {
+    if (!ENTITY_TYPE[prefix]) throw new Error(`unsupported public record prefix: ${prefix}`);
+    const timestamp = current.toISOString();
+    return {
+      id,
+      timestamp,
+      item: {
+        ...fields,
+        PK: `${prefix}#${id}`,
+        SK: 'META',
+        entityType: ENTITY_TYPE[prefix],
+        entityId: id,
+        schemaVersion: 1,
+        version: 1,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        ...(ttlDays ? { ttl: Math.floor(current.getTime() / 1000) + ttlDays * 24 * 60 * 60 } : {}),
+      },
+    };
+  }
+
+  function invalidateWriteCaches(fields) {
+    if (fields.verified === true && fields.status === 'verified') {
+      trustedCache = undefined;
+      trustedCacheUntil = 0;
+    }
+    countsCache = undefined;
+    countsCacheUntil = 0;
+  }
+
+  async function putDailySubmission(prefix, fields, scope, clientKey, { ttlDays } = {}) {
     const safeScope = typeof scope === 'string' && /^[a-z][a-z0-9-]{0,39}$/.test(scope)
       ? scope
       : null;
@@ -145,70 +174,51 @@ export function createDynamoPublicStore({
       : null;
     if (
       !safeScope || !safeClientKey ||
-      !Number.isInteger(limit) || limit < 1 || limit > 100 ||
-      !Number.isInteger(ttlDays) || ttlDays < 1 || ttlDays > 30
-    ) return false;
+      !Number.isInteger(ttlDays) || ttlDays < 1 || ttlDays > 180
+    ) throw new Error('invalid daily submission configuration');
 
     const current = now();
-    const timestamp = current.toISOString();
-    const window = timestamp.slice(0, 10);
+    const window = current.toISOString().slice(0, 10);
+    const id = createHash('sha256')
+      .update(`submission:${safeScope}:${safeClientKey}:${window}`)
+      .digest('hex');
+    const record = buildRecord(prefix, fields, { ttlDays, id, current });
     try {
-      await client.send(new UpdateCommand({
+      await client.send(new PutCommand({
         TableName: table,
-        Key: { PK: `LIMIT#${safeScope}#${safeClientKey}`, SK: `DAY#${window}` },
-        UpdateExpression:
-          'SET #ttl = if_not_exists(#ttl, :ttl), entityType = if_not_exists(entityType, :entityType), ' +
-          'createdAt = if_not_exists(createdAt, :timestamp), updatedAt = :timestamp ADD #count :one',
-        ConditionExpression: 'attribute_not_exists(#count) OR #count < :limit',
-        ExpressionAttributeNames: { '#count': 'count', '#ttl': 'ttl' },
-        ExpressionAttributeValues: {
-          ':one': 1,
-          ':limit': limit,
-          ':ttl': Math.floor(current.getTime() / 1000) + ttlDays * 24 * 60 * 60,
-          ':entityType': 'submission-limit',
-          ':timestamp': timestamp,
-        },
-        ReturnValues: 'NONE',
+        Item: record.item,
+        ConditionExpression: 'attribute_not_exists(PK)',
       }));
-      return true;
     } catch (error) {
-      if (error?.name === 'ConditionalCheckFailedException') return false;
+      if (error?.name === 'ConditionalCheckFailedException') return null;
       throw error;
     }
+    invalidateWriteCaches(fields);
+    return {
+      ...fields,
+      id: record.id,
+      createdAt: record.timestamp,
+      updatedAt: record.timestamp,
+    };
   }
 
   async function put(prefix, fields, { ttlDays } = {}) {
-    if (!ENTITY_TYPE[prefix]) throw new Error(`unsupported public record prefix: ${prefix}`);
-    const id = randomId();
-    const current = now();
-    const timestamp = current.toISOString();
-    const item = {
-      ...fields,
-      PK: `${prefix}#${id}`,
-      SK: 'META',
-      entityType: ENTITY_TYPE[prefix],
-      entityId: id,
-      schemaVersion: 1,
-      version: 1,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      ...(ttlDays ? { ttl: Math.floor(current.getTime() / 1000) + ttlDays * 24 * 60 * 60 } : {}),
-    };
+    const record = buildRecord(prefix, fields, { ttlDays });
     await client.send(new PutCommand({
       TableName: table,
-      Item: item,
+      Item: record.item,
       ConditionExpression: 'attribute_not_exists(PK)',
     }));
-    if (fields.verified === true && fields.status === 'verified') {
-      trustedCache = undefined;
-      trustedCacheUntil = 0;
-    }
-    countsCache = undefined;
-    countsCacheUntil = 0;
-    return { ...fields, id, createdAt: timestamp, updatedAt: timestamp };
+    invalidateWriteCaches(fields);
+    return {
+      ...fields,
+      id: record.id,
+      createdAt: record.timestamp,
+      updatedAt: record.timestamp,
+    };
   }
 
-  return { counts, list, put, takeSubmissionSlot, verifiedNonprofitProfiles };
+  return { counts, list, put, putDailySubmission, verifiedNonprofitProfiles };
 }
 
 const str = (value, max) => typeof value === 'string' ? value.trim().slice(0, max) : '';
@@ -359,10 +369,10 @@ export function createPublicApi({ store }) {
     if (typeof clientKey !== 'string' || !/^[a-f0-9]{64}$/.test(clientKey)) {
       return result(401, { error: 'sign in required' });
     }
-    const hasSlot = typeof store.takeSubmissionSlot === 'function' &&
-      await store.takeSubmissionSlot('nonprofit', clientKey, { limit: 1, ttlDays: 2 });
-    if (!hasSlot) return result(429, { error: 'one nonprofit submission is allowed per account each day' });
-    const nonprofit = await store.put('NPO', {
+    if (typeof store.putDailySubmission !== 'function') {
+      throw new Error('daily submission store unavailable');
+    }
+    const nonprofit = await store.putDailySubmission('NPO', {
       name,
       causeTags,
       needs: tags(body.needs),
@@ -370,7 +380,8 @@ export function createPublicApi({ store }) {
       source: 'community-submission',
       status: 'pending',
       verified: false,
-    }, { ttlDays: 30 });
+    }, 'nonprofit', clientKey, { ttlDays: 30 });
+    if (!nonprofit) return result(429, { error: 'one nonprofit submission is allowed per account each day' });
     return result(202, nonprofit);
   }
 

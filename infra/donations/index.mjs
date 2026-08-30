@@ -274,7 +274,6 @@ const publicStore = createDynamoPublicStore({
   table: TABLE,
   PutCommand,
   ScanCommand,
-  UpdateCommand,
   randomId: randomUUID,
 });
 const publicApi = createPublicApi({ store: publicStore });

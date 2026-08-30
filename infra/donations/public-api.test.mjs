@@ -15,12 +15,6 @@ class PutCommand {
   }
 }
 
-class UpdateCommand {
-  constructor(input) {
-    this.input = input;
-  }
-}
-
 const trustedCause = {
   PK: 'CAUSE#reef', SK: 'META', entityId: 'reef',
   title: 'Restore the reef', summary: 'A source-backed need.',
@@ -71,7 +65,7 @@ test('Dynamo store paginates one cached trusted scan and projects anonymous read
   };
   const fixed = new Date('2026-08-29T12:00:00.000Z');
   const store = createDynamoPublicStore({
-    client, table: 'alohalive', PutCommand, ScanCommand, UpdateCommand,
+    client, table: 'alohalive', PutCommand, ScanCommand,
     randomId: () => 'generated-id', now: () => fixed,
   });
 
@@ -121,7 +115,7 @@ test('Dynamo store invalidates only the caches affected by pending and verified 
   };
   const fixed = new Date('2026-08-29T12:00:00.000Z');
   const store = createDynamoPublicStore({
-    client, table: 'alohalive', PutCommand, ScanCommand, UpdateCommand,
+    client, table: 'alohalive', PutCommand, ScanCommand,
     randomId: () => 'generated-id', now: () => fixed,
   });
   await store.list('NPO');
@@ -160,13 +154,12 @@ test('Dynamo store invalidates only the caches affected by pending and verified 
   });
 });
 
-test('Dynamo store atomically limits same-day submissions without storing the Firebase UID', async () => {
+test('Dynamo store makes the pending record the atomic same-day submission limit', async () => {
   const calls = [];
   let attempts = 0;
   const client = {
     async send(command) {
       calls.push(command);
-      if (!(command instanceof UpdateCommand)) return { Items: [] };
       attempts += 1;
       if (attempts === 1) return {};
       const error = new Error('quota exhausted');
@@ -176,22 +169,56 @@ test('Dynamo store atomically limits same-day submissions without storing the Fi
   };
   const fixed = new Date('2026-08-29T12:00:00.000Z');
   const store = createDynamoPublicStore({
-    client, table: 'alohalive', PutCommand, ScanCommand, UpdateCommand,
+    client, table: 'alohalive', PutCommand, ScanCommand,
     randomId: () => 'generated-id', now: () => fixed,
   });
   const clientKey = 'c'.repeat(64);
+  const fields = {
+    name: 'Reef Helpers', causeTags: ['ocean'], source: 'community-submission',
+    status: 'pending', verified: false,
+  };
 
-  assert.equal(await store.takeSubmissionSlot('nonprofit', clientKey, { limit: 1, ttlDays: 2 }), true);
-  assert.equal(await store.takeSubmissionSlot('nonprofit', clientKey, { limit: 1, ttlDays: 2 }), false);
-  const input = calls.find((call) => call instanceof UpdateCommand).input;
-  assert.deepEqual(input.Key, {
-    PK: `LIMIT#nonprofit#${clientKey}`,
-    SK: 'DAY#2026-08-29',
+  const accepted = await store.putDailySubmission(
+    'NPO', fields, 'nonprofit', clientKey, { ttlDays: 30 });
+  const rejected = await store.putDailySubmission(
+    'NPO', { ...fields, name: 'Different Org' }, 'nonprofit', clientKey, { ttlDays: 30 });
+
+  assert.ok(accepted);
+  assert.equal(rejected, null);
+  assert.equal(calls.every((call) => call instanceof PutCommand), true);
+  assert.equal(calls[0].input.ConditionExpression, 'attribute_not_exists(PK)');
+  assert.equal(calls[0].input.Item.PK, calls[1].input.Item.PK);
+  assert.match(calls[0].input.Item.PK, /^NPO#[a-f0-9]{64}$/);
+  assert.equal(calls[0].input.Item.entityId, calls[0].input.Item.PK.slice(4));
+  assert.equal(calls[0].input.Item.ttl, Math.floor(fixed.getTime() / 1000) + 30 * 24 * 60 * 60);
+  assert.equal(JSON.stringify(calls).includes(clientKey), false);
+});
+
+test('failed daily submission writes leave no separate quota state and can be retried', async () => {
+  const calls = [];
+  let attempts = 0;
+  const failure = new Error('transient write failure');
+  failure.name = 'InternalServerError';
+  const client = {
+    async send(command) {
+      calls.push(command);
+      attempts += 1;
+      if (attempts === 1) throw failure;
+      return {};
+    },
+  };
+  const store = createDynamoPublicStore({
+    client, table: 'alohalive', PutCommand, ScanCommand,
+    randomId: () => 'generated-id', now: () => new Date('2026-08-29T12:00:00.000Z'),
   });
-  assert.equal(input.ConditionExpression, 'attribute_not_exists(#count) OR #count < :limit');
-  assert.equal(input.ExpressionAttributeValues[':limit'], 1);
-  assert.equal(input.ExpressionAttributeValues[':ttl'], Math.floor(fixed.getTime() / 1000) + 2 * 24 * 60 * 60);
-  assert.equal(JSON.stringify(input).includes('firebase-uid'), false);
+  const submit = () => store.putDailySubmission('NPO', {
+    name: 'Reef Helpers', causeTags: ['ocean'], status: 'pending', verified: false,
+  }, 'nonprofit', 'd'.repeat(64), { ttlDays: 30 });
+
+  await assert.rejects(submit(), (error) => error === failure);
+  assert.ok(await submit());
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].input.Item.PK, calls[1].input.Item.PK);
 });
 
 test('Dynamo store refreshes trusted and profile caches exactly at TTL expiry', async () => {
@@ -206,7 +233,7 @@ test('Dynamo store refreshes trusted and profile caches exactly at TTL expiry', 
     },
   };
   const store = createDynamoPublicStore({
-    client, table: 'alohalive', PutCommand, ScanCommand, UpdateCommand,
+    client, table: 'alohalive', PutCommand, ScanCommand,
     randomId: () => 'generated-id', now: () => new Date(clockMs), cacheTtlMs: 3_000,
   });
   await store.list('NPO');
@@ -226,6 +253,17 @@ function memoryStore(initial = {}, { submissionLimit = Infinity } = {}) {
   const writes = [];
   const quotaChecks = [];
   let sequence = 0;
+  const persist = (prefix, fields, options = {}) => {
+    sequence += 1;
+    const id = `${prefix.toLowerCase()}-${sequence}`;
+    const record = {
+      PK: `${prefix}#${id}`, SK: 'META', entityId: id,
+      id, ...fields, createdAt: '2026-08-29T12:00:00.000Z', updatedAt: '2026-08-29T12:00:00.000Z',
+    };
+    records.set(prefix, [...(records.get(prefix) ?? []), record]);
+    writes.push({ prefix, fields, options, record });
+    return record;
+  };
   return {
     quotaChecks,
     writes,
@@ -245,20 +283,13 @@ function memoryStore(initial = {}, { submissionLimit = Infinity } = {}) {
     async verifiedNonprofitProfiles() {
       return records.get('USER') ?? [];
     },
-    async takeSubmissionSlot(scope, clientKey, options) {
+    async putDailySubmission(prefix, fields, scope, clientKey, options) {
       quotaChecks.push({ scope, clientKey, options });
-      return quotaChecks.length <= submissionLimit;
+      if (quotaChecks.length > submissionLimit) return null;
+      return persist(prefix, fields, options);
     },
     async put(prefix, fields, options = {}) {
-      sequence += 1;
-      const id = `${prefix.toLowerCase()}-${sequence}`;
-      const record = {
-        PK: `${prefix}#${id}`, SK: 'META', entityId: id,
-        id, ...fields, createdAt: '2026-08-29T12:00:00.000Z', updatedAt: '2026-08-29T12:00:00.000Z',
-      };
-      records.set(prefix, [...(records.get(prefix) ?? []), record]);
-      writes.push({ prefix, fields, options, record });
-      return record;
+      return persist(prefix, fields, options);
     },
   };
 }
@@ -313,7 +344,7 @@ test('public routes create pending records with TTL and reject coerced object fi
   assert.equal(store.writes.length, 3, 'invalid requests must not write records');
 });
 
-test('nonprofit submissions require authentication and consume an atomic per-account slot before writing', async () => {
+test('nonprofit submissions require authentication and atomically write at most once per account/day', async () => {
   const store = memoryStore({}, { submissionLimit: 1 });
   const api = createPublicApi({ store });
   const request = {
@@ -330,7 +361,7 @@ test('nonprofit submissions require authentication and consume an atomic per-acc
   assert.deepEqual(store.quotaChecks[0], {
     scope: 'nonprofit',
     clientKey: 'b'.repeat(64),
-    options: { limit: 1, ttlDays: 2 },
+    options: { ttlDays: 30 },
   });
 });
 

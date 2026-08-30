@@ -49,4 +49,4 @@ Release flow: PR feature → `dev` (auto-deploys dev site) → PR `dev` → `pro
 | PR | Qodo findings | Resolution |
 |----|---------------|------------|
 | [#18](https://github.com/ContingentX/alohalive/pull/18) | 6 bugs, 3 rule violations (review arrived after merge) | Findings are addressed in the focused public-API hardening follow-up. |
-| [#23](https://github.com/ContingentX/alohalive/pull/23) | 1 bug, 1 rule violation | Require authenticated, atomically quota-bound nonprofit submissions; record this review evidence. |
+| [#23](https://github.com/ContingentX/alohalive/pull/23) | 2 bugs across incremental reviews, 1 rule violation | Require authenticated, single-write daily-limited nonprofit submissions; record this PR's review evidence. |
