@@ -10,6 +10,7 @@
   },
   "scripts": {
     "start": "node src/index.js",
+    "trueforge:agent": "node src/configure-agent.js",
     "ingest": "node src/index.js --ingest-once",
     "demo:brightdata-bridge": "node demo/brightdata-mcp-bridge.mjs",
     "smoke:brightdata-bridge": "node demo/brightdata-bridge-smoke.mjs",

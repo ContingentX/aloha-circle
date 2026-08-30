@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { once } from 'node:events';
 import os from 'node:os';
@@ -56,6 +57,53 @@ function terminalStreamThatStaysOpen(turnId, onClose) {
   };
 }
 
+test('AlohaLive registers one reusable agent and updates it idempotently', async () => {
+  const spec = {
+    model: { name: 'test/model' },
+    instructions: 'test instructions',
+    mcp_servers: [{ name: 'alohalive-local' }],
+  };
+  const calls = [];
+  let agents = [];
+  const client = {
+    agents: {
+      list: async () => ({ data: agents }),
+      create: async (request) => {
+        calls.push({ method: 'create', request });
+        const agent = { id: 'agent-1', name: request.name, manifest: request.manifest };
+        agents = [agent];
+        return { data: agent };
+      },
+      update: async (id, request) => {
+        calls.push({ method: 'update', id, request });
+        const agent = { ...agents[0], manifest: request.manifest };
+        agents = [agent];
+        return { data: agent };
+      },
+      get: async (id) => {
+        const agent = agents.find((item) => item.id === id);
+        const { mcp_servers: mcpServers, ...manifest } = agent.manifest;
+        return { data: { ...agent, manifest: { ...manifest, mcpServers } } };
+      },
+    },
+  };
+  const trueforge = await import('../src/trueforge.js');
+
+  const created = await trueforge.registerAlohaAgent({
+    client, agentName: 'alohalive-maui-match', agentSpec: spec,
+  });
+  const updated = await trueforge.registerAlohaAgent({
+    client, agentName: 'alohalive-maui-match', agentSpec: spec,
+  });
+
+  assert.equal(created.action, 'created');
+  assert.equal(updated.action, 'updated');
+  assert.deepEqual(calls, [
+    { method: 'create', request: { name: 'alohalive-maui-match', manifest: spec } },
+    { method: 'update', id: 'agent-1', request: { manifest: spec } },
+  ]);
+});
+
 test('MCP tools and TrueForge manifest enforce the vertical-slice contract', async (t) => {
   const testDataDir = mkdtempSync(path.join(os.tmpdir(), 'alohalive-trueforge-contract-'));
   process.env.ALOHALIVE_DATA_DIR = testDataDir;
@@ -85,17 +133,23 @@ test('MCP tools and TrueForge manifest enforce the vertical-slice contract', asy
   await ingestOnce();
   const visitor = store.insert('visitors', { name: 'Contract Visitor', interests: ['diving', 'ocean'] });
   const trueforgeSessionId = 'sess-contract-1';
+  let createSessionRequest;
   const appSession = await trueforge.createAlohaSession({
     visitorId: visitor.id,
-    agentSpec: trueforge.buildAgentSpec({ modelName: 'test/model', mcpServerName: 'alohalive-local' }),
+    agentName: 'alohalive-maui-match',
     client: {
       sessions: {
-        // The SDK unwraps the HTTP envelope to GetSessionResponse: { data: Session }.
-        create: async () => ({ data: { id: trueforgeSessionId } }),
+        // Awaiting the SDK unwraps HTTP metadata to GetSessionResponse: { data: Session }.
+        create: async (request) => {
+          createSessionRequest = request;
+          return { data: { id: trueforgeSessionId, agent: { type: 'reference', name: 'alohalive-maui-match' } } };
+        },
       },
     },
   });
   assert.equal(appSession.trueforgeSessionId, trueforgeSessionId);
+  assert.equal(appSession.trueforgeAgentName, 'alohalive-maui-match');
+  assert.deepEqual(createSessionRequest, { agent: { name: 'alohalive-maui-match' } });
   let terminalStreamClosed = false;
   const terminalResult = await trueforge.runMatchTurn({
     sessionId: appSession.id,
@@ -117,13 +171,42 @@ test('MCP tools and TrueForge manifest enforce the vertical-slice contract', asy
   assert.equal(context.scorer.version, 1);
   assert.equal(context.scorer.endorsementScope, 'all_endorsements_for_cause_nonprofit');
   assert.match(context.scorer.formula, /every endorsement where endorsement\.nonprofit === cause\.nonprofit/);
-  assert.equal(context.oracle.score, 22);
+  // The combined Dynamo demo seed has a different trusted-endorsement set
+  // from the original vertical-slice fixture; keep the exact oracle receipt
+  // pinned to the data that will ship with this integration branch.
+  assert.equal(context.oracle.score, 18);
+  assert.equal(context.oracle.scoreReceipt.total, context.oracle.score);
+  assert.equal(context.sandboxVerification.tool, 'exec');
+  assert.equal(context.sandboxVerification.arguments.intent, 'Verify the deterministic AlohaLive score exactly once.');
+  assert.match(context.sandboxVerification.arguments.command, /^s=\$\(\(/);
+  assert.match(context.sandboxVerification.arguments.command, /printf 'ALOHALIVE_SCORE_RECEIPT=/);
+  assert.ok(context.sandboxVerification.arguments.command.length < 500);
+  const verifierOutput = execFileSync('/bin/sh', ['-c', context.sandboxVerification.arguments.command], { encoding: 'utf8' });
+  const verifierReceipt = JSON.parse(verifierOutput.trim().replace('ALOHALIVE_SCORE_RECEIPT=', ''));
+  assert.deepEqual(verifierReceipt, {
+    sandboxScore: context.oracle.score,
+    oracleScore: context.oracle.score,
+    localId: context.oracle.localId,
+    causeId: context.oracle.causeId,
+    agrees: true,
+  });
+  assert.deepEqual(context.introductionProposal, {
+    session_id: trueforgeSessionId,
+    visitor_id: visitor.id,
+    local_id: context.oracle.localId,
+    cause_id: context.oracle.causeId,
+    explanation: context.oracle.why,
+  });
+
+  const storedLocals = store.load('locals');
+  const storedCauses = store.load('causes');
+  const storedEndorsements = store.load('endorsements');
 
   assert.throws(
     () => matcher.rankMatch(visitor, {
-      locals: context.locals,
-      causes: [{ ...context.causes[0], urgency: 0 }],
-      endorsements: context.endorsements,
+      locals: storedLocals,
+      causes: [{ ...storedCauses[0], urgency: 0 }],
+      endorsements: storedEndorsements,
     }),
     /cause.urgency must be an integer from 1 through 5/,
   );
@@ -172,7 +255,12 @@ test('MCP tools and TrueForge manifest enforce the vertical-slice contract', asy
   });
   assert.equal(spec.config.sandbox.enabled, true);
   assert.equal(spec.config.dynamic_sub_agents.enabled, false);
-  assert.equal(spec.config.iteration_limit, 20);
+  assert.equal(spec.model.params.max_tokens, 1536);
+  assert.equal(spec.model.params.temperature, 0);
+  assert.equal(spec.config.iteration_limit, 6);
+  assert.match(spec.instructions, /Call exec exactly once/);
+  assert.match(spec.instructions, /Do not create files/);
+  assert.match(spec.instructions, /using introductionProposal verbatim/);
   assert.equal(spec.mcp_servers.length, 1);
   assert.deepEqual(spec.mcp_servers[0].require_approval_for_tools, ['request_introduction']);
   assert.equal(spec.instructions.includes('Bright Data'), false);

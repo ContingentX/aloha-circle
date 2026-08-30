@@ -3,6 +3,8 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { z } from 'zod';
 import { getMatchContext, requestIntroduction } from './introductions.js';
 
+const opaqueId = z.string().min(1).max(120).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/);
+
 function jsonResult(value) {
   return {
     content: [{ type: 'text', text: JSON.stringify(value) }],
@@ -53,8 +55,8 @@ export function createAlohaMcpServer() {
       inputSchema: {
         session_id: z.string().min(1),
         visitor_id: z.string().uuid(),
-        local_id: z.string().uuid(),
-        cause_id: z.string().uuid(),
+        local_id: opaqueId,
+        cause_id: opaqueId,
         explanation: z.string().min(1).max(1000),
       },
       annotations: {

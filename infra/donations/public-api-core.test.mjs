@@ -131,6 +131,19 @@ test('rankMatch ignores unverified locals and endorsements', () => {
   );
   assert.equal(match.localId, 'trusted');
   assert.equal(match.score, 10);
+  assert.deepEqual(match.scoreReceipt, {
+    sharedInterestCount: 1,
+    sharedInterestPoints: 3,
+    localCauseOverlapCount: 1,
+    localCausePoints: 2,
+    visitorCauseOverlapCount: 1,
+    visitorCausePoints: 2,
+    urgency: 3,
+    urgencyPoints: 3,
+    endorsementRawScore: 0,
+    endorsementPoints: 0,
+    total: 10,
+  });
   assert.equal(rankMatch(
     { id: 'visitor-1', name: 'Kai', interests: ['ocean'] },
     { locals: [local('untrusted', { verified: false })], causes: [cause('reef')], endorsements: [] },
@@ -168,4 +181,5 @@ test('rankMatch emits the cause id and source evidence required by the Match con
   assert.equal(match.blocks.length, 3);
   assert.equal(match.blocks[1].sourceUrl, 'https://example.test/reef');
   assert.equal(match.blocks[1].fetchedAt, '2026-08-29T00:00:00.000Z');
+  assert.equal(match.scoreReceipt.total, match.score);
 });
