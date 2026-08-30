@@ -29,6 +29,7 @@ export function buildAgentSpec({
       'Always call get_match_context before proposing a match.',
       'Use the TrueForge sandbox to run a small deterministic program that applies the returned scoring contract.',
       'Compare the sandbox result with the returned oracle and stop if they differ.',
+      'The final successful sandbox command must print one line prefixed ALOHALIVE_SCORE_RECEIPT= followed by JSON with sandboxScore, oracleScore, localId, causeId, and agrees.',
       'Explain the selected local, cause, evidence source, score, and proposed effect.',
       'Call request_introduction exactly once with the IDs supplied by the tool.',
       'That call must remain behind TrueForge human approval. If denied, stop and do not retry or substitute another write.',
@@ -85,6 +86,9 @@ async function collectTurn(stream) {
     if (event.type === 'tool.approval_required') approvalEvents.push(event);
     if (event.type === 'turn.done') terminalState = event.state;
     trace.push({ sequenceNumber: id == null ? null : Number(id), type: event.type, threadId: event.threadId ?? null });
+    // A terminal event is authoritative even if the provider leaves the SSE
+    // connection open. Breaking also invokes the SDK iterator's cancel path.
+    if (event.type === 'turn.done') break;
   }
 
   const pendingApprovals = [];
@@ -121,10 +125,14 @@ export async function createAlohaSession({ visitorId, client = createTrueForgeCl
   const visitor = findById('visitors', visitorId);
   if (!visitor) throw new Error('unknown visitor');
 
-  // Awaiting the Fern SDK response unwraps it to the parsed session object.
-  const trueforgeSession = await client.sessions.create({
+  // The Fern promise unwraps the HTTP envelope, but the API response still
+  // contains the session under `data`.
+  const response = await client.sessions.create({
     agent: { spec: agentSpec ?? buildAgentSpec() },
   });
+  const trueforgeSession = response?.data;
+  if (!trueforgeSession?.id) throw new Error('TrueForge create session response is missing data.id');
+
   return insert('sessions', {
     visitorId,
     trueforgeSessionId: trueforgeSession.id,

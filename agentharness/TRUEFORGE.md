@@ -56,14 +56,17 @@ RUN_TRUEFORGE_LIVE=1 npm run test:live
 The test uses fictional visitor identities and temporary local storage. It asserts:
 
 - MCP initialization and a tool response are present in the streamed trace;
-- a Daytona sandbox is created;
+- a sandbox is created and persisted events contain the successful command/output plus an agreeing scorer receipt;
 - `request_introduction` reaches `tool.approval_required` exactly once;
+- a fresh SDK client restores the pending-approval event before the decision;
 - a direct write-tool call without a matching approval capability is rejected;
 - the denial path produces zero introduction records;
 - the approval path consumes one capability and produces exactly one introduction record; and
-- a fresh TrueForge SDK client can list the persisted session turns.
+- a fresh TrueForge SDK client can list the persisted session turns and the introduction receipt is read back from durable storage.
 
-The live test deliberately fails fast when `RUN_TRUEFORGE_LIVE=1` is absent, so it cannot be mistaken for part of the credential-free default suite.
+The live test deliberately fails fast when `RUN_TRUEFORGE_LIVE=1` is absent, so it cannot be mistaken for part of the credential-free default suite. It requires the persisted event history to contain an actual sandbox command, successful output, and a machine-readable score receipt whose sandbox and oracle values agree. It also reconnects before approval to restore the pending approval, reconnects after approval to list both turns, and reads the durable introduction receipt back from the JSON store.
+
+`sandbox.created` does not identify the configured provider. TrueForge's local fallback can be used for a credential-free diagnostic, but that run is not qualifying Daytona evidence. Before labeling a trace as the Daytona acceptance run, verify separately that TrueForge reports the configured sandbox provider as Daytona; never print or commit the provider credential.
 
 ## API surface
 

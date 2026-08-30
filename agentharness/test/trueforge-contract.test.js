@@ -39,6 +39,23 @@ function completedStream(turnId) {
   };
 }
 
+function terminalStreamThatStaysOpen(turnId, onClose) {
+  return {
+    async *withMetadata() {
+      try {
+        for await (const entry of completedStream(turnId).withMetadata()) {
+          yield entry;
+        }
+        await new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('collector waited after turn.done')), 100);
+        });
+      } finally {
+        onClose();
+      }
+    },
+  };
+}
+
 test('MCP tools and TrueForge manifest enforce the vertical-slice contract', async (t) => {
   const testDataDir = mkdtempSync(path.join(os.tmpdir(), 'alohalive-trueforge-contract-'));
   process.env.ALOHALIVE_DATA_DIR = testDataDir;
@@ -73,17 +90,34 @@ test('MCP tools and TrueForge manifest enforce the vertical-slice contract', asy
     agentSpec: trueforge.buildAgentSpec({ modelName: 'test/model', mcpServerName: 'alohalive-local' }),
     client: {
       sessions: {
-        // The SDK promise unwraps directly to the parsed session, not { data }.
-        create: async () => ({ id: trueforgeSessionId }),
+        // The SDK unwraps the HTTP envelope to GetSessionResponse: { data: Session }.
+        create: async () => ({ data: { id: trueforgeSessionId } }),
       },
     },
   });
   assert.equal(appSession.trueforgeSessionId, trueforgeSessionId);
+  let terminalStreamClosed = false;
+  const terminalResult = await trueforge.runMatchTurn({
+    sessionId: appSession.id,
+    client: {
+      sessions: {
+        createTurnStream: async () => terminalStreamThatStaysOpen('turn-terminal-1', () => {
+          terminalStreamClosed = true;
+        }),
+      },
+    },
+  });
+  assert.equal(terminalResult.terminalState.status, 'done');
+  assert.equal(terminalStreamClosed, true);
 
   const context = introductions.getMatchContext({ sessionId: trueforgeSessionId, visitorId: visitor.id });
   assert.ok(context.oracle.localId);
   assert.ok(context.oracle.causeId);
   assert.equal(context.oracle.blocks.length, 3);
+  assert.equal(context.scorer.version, 1);
+  assert.equal(context.scorer.endorsementScope, 'all_endorsements_for_cause_nonprofit');
+  assert.match(context.scorer.formula, /every endorsement where endorsement\.nonprofit === cause\.nonprofit/);
+  assert.equal(context.oracle.score, 22);
 
   assert.throws(
     () => matcher.rankMatch(visitor, {

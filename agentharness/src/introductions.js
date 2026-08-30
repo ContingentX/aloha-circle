@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { findById, insert, load, updateById } from './store.js';
-import { rankMatch } from './matcher.js';
+import { MATCH_SCORING_CONTRACT, rankMatch } from './matcher.js';
 
 function fail(message) {
   const error = new Error(message);
@@ -67,14 +67,7 @@ export function getMatchContext({ sessionId, visitorId }) {
     locals,
     causes,
     endorsements,
-    scorer: {
-      sharedInterestWeight: 3,
-      localCauseWeight: 2,
-      visitorCauseWeight: 2,
-      urgencyWeight: 1,
-      endorsementWeights: { helping_now: 2, generally_helping: 1, not_sure: 0, causing_concern: -3 },
-      endorsementCap: 5,
-    },
+    scorer: MATCH_SCORING_CONTRACT,
     oracle,
   };
 }

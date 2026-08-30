@@ -1,16 +1,30 @@
 // Deterministic matcher: visitor × local × cause → match with a human "why".
 // All state is passed explicitly so the scorer stays pure and independently testable.
 
+export const MATCH_SCORING_CONTRACT = Object.freeze({
+  version: 1,
+  sharedInterestWeight: 3,
+  localCauseWeight: 2,
+  visitorCauseWeight: 2,
+  urgencyWeight: 1,
+  endorsementWeights: { helping_now: 2, generally_helping: 1, not_sure: 0, causing_concern: -3 },
+  endorsementScope: 'all_endorsements_for_cause_nonprofit',
+  endorsementAggregation: 'sum_then_upper_cap',
+  endorsementCap: 5,
+  overlapComparison: 'case_insensitive',
+  tieBreak: 'first_highest_in_locals_then_causes_input_order',
+  formula: 'score = sharedInterestWeight * sharedInterestCount + localCauseWeight * localCauseOverlapCount + visitorCauseWeight * visitorCauseOverlapCount + urgencyWeight * cause.urgency + min(sum(verdictWeight for every endorsement where endorsement.nonprofit === cause.nonprofit), endorsementCap)',
+});
+
 function overlap(a = [], b = []) {
   const setB = new Set(b.map((x) => x.toLowerCase()));
   return a.filter((x) => setB.has(x.toLowerCase()));
 }
 
 function endorsementScore(nonprofitName, endorsements) {
-  const verdictWeight = { helping_now: 2, generally_helping: 1, not_sure: 0, causing_concern: -3 };
   return endorsements
     .filter((e) => e.nonprofit === nonprofitName)
-    .reduce((sum, e) => sum + (verdictWeight[e.verdict] ?? 0), 0);
+    .reduce((sum, e) => sum + (MATCH_SCORING_CONTRACT.endorsementWeights[e.verdict] ?? 0), 0);
 }
 
 function assertCauseSignal(cause) {
@@ -43,11 +57,11 @@ export function rankMatch(visitor, { locals, causes, endorsements }) {
       const visitorCauseFit = overlap(visitor.interests, cause.causeTags);
       const trust = endorsementScore(cause.nonprofit, endorsements);
       const score =
-        sharedInterests.length * 3 +
-        localCauseFit.length * 2 +
-        visitorCauseFit.length * 2 +
-        (cause.urgency ?? 0) +
-        Math.min(trust, 5);
+        sharedInterests.length * MATCH_SCORING_CONTRACT.sharedInterestWeight +
+        localCauseFit.length * MATCH_SCORING_CONTRACT.localCauseWeight +
+        visitorCauseFit.length * MATCH_SCORING_CONTRACT.visitorCauseWeight +
+        (cause.urgency ?? 0) * MATCH_SCORING_CONTRACT.urgencyWeight +
+        Math.min(trust, MATCH_SCORING_CONTRACT.endorsementCap);
       if (!best || score > best.score) {
         best = { local, cause, sharedInterests, score };
       }
