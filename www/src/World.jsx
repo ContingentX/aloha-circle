@@ -52,13 +52,13 @@ const CONFIG = {
     {
       id: 'circle', label: 'Celebrate', still: STILLS[4], clip: DIVES[4],
       accent: '#ffd166', eyebrow: 'The Aloha Circle',
-      title: 'Spin the wheel. Win the table.',
-      body: 'Every donation spins for real experiences — like a plated dinner and meet & greet with celebrity chef Zack Laidlaw.',
-      tags: ['Donation wheel', 'Real experiences'],
+      title: 'Step into the Aloha Circle.',
+      body: 'Land at OGG and the kiʻi of the Hawaiian akua are waiting at baggage claim — a small donation joins you to the ohana and opens an AR experience you carry across Maui.',
+      tags: ['OGG baggage claim', 'AR experience'],
       scroll: 1.6, linger: 0.45,
       cta: {
-        primary: { label: 'Meet Maui now', href: '#app' },
-        secondary: { label: 'See live causes', href: '#app' },
+        primary: { label: 'Join the Aloha Circle', href: '#aloha-circle' },
+        secondary: { label: 'Meet Maui now', href: '#app' },
       },
     },
   ],

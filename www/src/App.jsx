@@ -285,7 +285,11 @@ export default function App() {
   return (
     <AuthProvider>
     <World />
-    <div className="page" id="app">
+    {/* page-wrap paints above the hero's fixed layers (z-index > the stage's 120)
+        so the app slides over the final scene and lands at the top of the screen;
+        #app moves here so CTA anchors land at the true top. */}
+    <div className="page-wrap" id="app">
+    <div className="page">
       <header>
         <div className="header-row">
           <h1>Aloha<span className="accent">Live</span></h1>
@@ -298,8 +302,9 @@ export default function App() {
         <AccountSection onClose={() => setView('home')} />
       ) : (
         <>
-          <CauseScroller />
+          {/* The scroll flight lands here: Circle of Aloha explainer + video first. */}
           <AlohaCircle />
+          <CauseScroller />
           <main>
             <DonationWheel />
             <VisitorTab />
@@ -309,6 +314,7 @@ export default function App() {
       <footer>
         <p>The Aloha Circle · Kahului Airport (OGG) · <a href="https://alohalive.net">alohalive.net</a></p>
       </footer>
+    </div>
     </div>
     </AuthProvider>
   );
