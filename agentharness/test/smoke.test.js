@@ -30,7 +30,7 @@ test('seed → ingest → visitor signup → match', async (t) => {
   ]);
 
   seedIfEmpty(path.join(HARNESS_DIR, 'fixtures', 'seed.json'));
-  const { status } = ingestOnce();
+  const { status } = await ingestOnce();
   assert.ok(status.some((s) => s.state === 'ok'), 'at least one source ingests ok');
   assert.ok(status.some((s) => s.state === 'needs_repair'), 'broken demo source is flagged needs_repair');
 

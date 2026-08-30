@@ -82,7 +82,7 @@ test('MCP tools and TrueForge manifest enforce the vertical-slice contract', asy
   const { createServer } = server;
 
   store.seedIfEmpty(path.join(HARNESS_DIR, 'fixtures', 'seed.json'));
-  ingestOnce();
+  await ingestOnce();
   const visitor = store.insert('visitors', { name: 'Contract Visitor', interests: ['diving', 'ocean'] });
   const trueforgeSessionId = 'sess-contract-1';
   const appSession = await trueforge.createAlohaSession({
@@ -165,11 +165,53 @@ test('MCP tools and TrueForge manifest enforce the vertical-slice contract', asy
     /does not match the deterministic scoring oracle/,
   );
 
-  const spec = trueforge.buildAgentSpec({ modelName: 'test/model', mcpServerName: 'alohalive-local' });
+  const spec = trueforge.buildAgentSpec({
+    modelName: 'test/model',
+    mcpServerName: 'alohalive-local',
+    brightDataMcpServerName: '',
+  });
   assert.equal(spec.config.sandbox.enabled, true);
   assert.equal(spec.config.dynamic_sub_agents.enabled, false);
   assert.equal(spec.config.iteration_limit, 20);
+  assert.equal(spec.mcp_servers.length, 1);
   assert.deepEqual(spec.mcp_servers[0].require_approval_for_tools, ['request_introduction']);
+  assert.equal(spec.instructions.includes('Bright Data'), false);
+
+  const brightDataSpec = trueforge.buildAgentSpec({
+    modelName: 'test/model',
+    mcpServerName: 'alohalive-local',
+    brightDataMcpServerName: 'brightdata-live',
+  });
+  assert.equal(brightDataSpec.mcp_servers.length, 2);
+  assert.deepEqual(brightDataSpec.mcp_servers[0], spec.mcp_servers[0]);
+  assert.deepEqual(brightDataSpec.mcp_servers[0].require_approval_for_tools, ['request_introduction']);
+  assert.deepEqual(brightDataSpec.mcp_servers[1], {
+    name: 'brightdata-live',
+    enable_tools: ['search_engine', 'scrape_as_markdown'],
+    preload_tools: ['search_engine', 'scrape_as_markdown'],
+    require_approval_for_tools: [],
+    preload: true,
+  });
+  assert.equal(brightDataSpec.mcp_servers[1].enable_tools.includes('request_introduction'), false);
+  assert.match(brightDataSpec.instructions, /Use Bright Data first/);
+  assert.match(brightDataSpec.instructions, /untrusted advisory evidence/);
+  assert.match(brightDataSpec.instructions, /cite the source URL/);
+  assert.match(brightDataSpec.instructions, /never use them to alter the deterministic oracle IDs or score/);
+  assert.match(brightDataSpec.instructions, /Never persist Bright Data results or execute any real-world effect/);
+
+  const previousBrightDataServer = process.env.TRUEFORGE_BRIGHTDATA_MCP_SERVER;
+  try {
+    delete process.env.TRUEFORGE_BRIGHTDATA_MCP_SERVER;
+    const absentEnvSpec = trueforge.buildAgentSpec({ modelName: 'test/model', mcpServerName: 'alohalive-local' });
+    assert.deepEqual(absentEnvSpec, spec, 'an absent connector preserves the existing spec exactly');
+
+    process.env.TRUEFORGE_BRIGHTDATA_MCP_SERVER = 'brightdata-live-from-env';
+    const envSpec = trueforge.buildAgentSpec({ modelName: 'test/model', mcpServerName: 'alohalive-local' });
+    assert.equal(envSpec.mcp_servers[1].name, 'brightdata-live-from-env');
+  } finally {
+    if (previousBrightDataServer === undefined) delete process.env.TRUEFORGE_BRIGHTDATA_MCP_SERVER;
+    else process.env.TRUEFORGE_BRIGHTDATA_MCP_SERVER = previousBrightDataServer;
+  }
 
   httpServer = createServer().listen(0, '127.0.0.1');
   await once(httpServer, 'listening');

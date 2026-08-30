@@ -90,7 +90,7 @@ export function createServer() {
     })));
   });
   app.get('/api/matches', (_req, res) => res.json(load('matches')));
-  app.post('/api/ingest', (_req, res) => res.json(ingestOnce()));
+  app.post('/api/ingest', asyncRoute(async (_req, res) => res.json(await ingestOnce())));
 
   app.use('/api/agent', requireLoopback);
 

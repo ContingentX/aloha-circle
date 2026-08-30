@@ -43,6 +43,42 @@ export TRUEFORGE_BASE_URL='http://127.0.0.1:8790'
 
 If the local TrueForge installation requires a token, export `TRUEFORGE_TOKEN` only in that shell. Never write it to this repository. The harness never logs the token or model/provider error text.
 
+### Demo-only Bright Data loopback bridge
+
+TrueForge 0.1.4 did not interoperate reliably with Bright Data's hosted remote transport in this demo. The built-in connector used bearer-header authentication and received `401`; connectors using Bright Data's documented tokenized remote URL could show Connected but timed out during a TrueForge turn. Do not reinterpret those failures as a live-data success.
+
+The verified hackathon fallback is `demo/brightdata-mcp-bridge.mjs`. It invokes the pinned official `@brightdata/mcp@2.11.1` package over stdio and exposes only a loopback Streamable HTTP endpoint to TrueForge. The token enters the bridge only through its process environment, is removed from that environment after startup, remains in a closure, and is never returned or logged. There is no browser credential form.
+
+Install the locked dependencies, enter the key without echoing it, and start the bridge:
+
+```bash
+npm ci
+read -rs BRIGHTDATA_API_TOKEN
+printf '\n'
+BRIGHTDATA_API_TOKEN="$BRIGHTDATA_API_TOKEN" npm run demo:brightdata-bridge
+unset BRIGHTDATA_API_TOKEN
+```
+
+The `unset` runs after the bridge exits. In TrueForge **Settings → Connectors**, add a no-auth MCP server named `brightdata-bridge` with URL `http://127.0.0.1:8788/mcp`, then export only its name:
+
+```bash
+export TRUEFORGE_BRIGHTDATA_MCP_SERVER='brightdata-bridge'
+```
+
+The bridge is intentionally non-production: it binds only `127.0.0.1`, accepts only loopback peers, permits one upstream call at a time, caps serialized results at 1 MB, discards raw upstream errors, and exposes exactly `search_engine` plus `scrape_as_markdown`. Scrape targets must be public HTTPS without URL credentials or private/reserved DNS results. SIGINT/SIGTERM and tests close the captured listener.
+
+The optional live smoke is explicit and is never part of Node's automatic test discovery:
+
+```bash
+RUN_BRIGHTDATA_BRIDGE_SMOKE=1 npm run smoke:brightdata-bridge
+```
+
+`@brightdata/mcp@2.11.1` is pinned with lockfile integrity. Its unused nested `@modelcontextprotocol/sdk@1.21.2` triggers two high npm advisories; the shipped server resolves the harness's patched SDK 1.30.0 through FastMCP, and this fresh-per-call, loopback-only demo does not expose the vulnerable cross-client, DNS-rebinding, or ReDoS paths. No patched non-breaking Bright Data release is currently available, so this accepted hackathon limitation is another reason never to expose the bridge publicly.
+
+See the official [Bright Data MCP package](https://www.npmjs.com/package/@brightdata/mcp), [Bright Data hosted MCP setup](https://docs.brightdata.com/ai/mcp-server/integrations/n8n), and [TrueForge MCP server setup](https://trueforge.dev/mcp-servers).
+
+When configured, the agent may use only `search_engine` to find current Maui community needs and `scrape_as_markdown` to read one selected source. This is live, untrusted advisory web evidence with a source URL. It does not write to DynamoDB, alter deterministic oracle IDs or scores, execute an introduction, or feed the custom Bright Data-to-`CauseSignal` persistence pipeline in `src/ingest.js`.
+
 The harness binds to `127.0.0.1` by default. The MCP endpoint independently requires both a loopback peer address and an allowed loopback Host header, so spoofing `Host: localhost` from a LAN client is insufficient. Run TrueForge as a host process for this local slice; do not expose the MCP endpoint to a container bridge, LAN, or public interface.
 
 ## Live evidence test
