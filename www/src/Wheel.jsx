@@ -41,7 +41,7 @@ function WheelFace({ prizes, angle, duration }) {
         })}
         <circle cx="100" cy="100" r="13" fill="white" stroke="var(--ocean-deep)" strokeWidth="3" />
       </g>
-      <path d="M100 1 L90 22 L110 22 Z" fill="var(--coral)" stroke="white" strokeWidth="2" />
+      <path d="M100 24 L90 3 L110 3 Z" fill="var(--coral)" stroke="white" strokeWidth="2" />
     </svg>
   );
 }

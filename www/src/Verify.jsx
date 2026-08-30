@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth, emailDomain, normalizeDomain } from './auth.jsx';
 import { AIRPORTS } from './firebase.js';
 
-export function AuthButton() {
+export function AuthButton({ onOpenAccount }) {
   const { user, profile, ready, signInWithGoogle, signOutUser } = useAuth();
   const [error, setError] = useState(null);
   if (!ready) return null;
@@ -18,8 +18,10 @@ export function AuthButton() {
   }
   return (
     <div className="auth-box">
-      {user.photoURL && <img className="avatar" src={user.photoURL} alt="" referrerPolicy="no-referrer" />}
-      <span>{user.displayName}</span>
+      <button className="user-chip" onClick={onOpenAccount} title="Your account">
+        {user.photoURL && <img className="avatar" src={user.photoURL} alt="" referrerPolicy="no-referrer" />}
+        <span>{user.displayName}</span>
+      </button>
       <VerifiedBadge verification={profile?.verification} />
       <button className="link-btn" onClick={signOutUser}>Sign out</button>
     </div>
