@@ -24,12 +24,29 @@ cd agentharness && npm install && npm start
 cd www && npm install && npm run dev
 # → http://localhost:5173
 
-# 3. (optional) Mobile app in Expo Go
+# 3. (optional) Mobile app in Expo Go; opt into LAN binding for device access
+ALOHALIVE_HOST=0.0.0.0 npm --prefix agentharness start
 cd app && npm install && npx expo start
 # in the app, set API base to http://<your-LAN-IP>:8787
 ```
 
+LAN binding is only for the visitor-facing API. The MCP endpoint and `/api/agent/*` control surface remain loopback-only even when `ALOHALIVE_HOST=0.0.0.0` is set.
+
 Sign up as a visitor on the site — you'll get an instant match against the seeded locals/causes. The harness re-ingests CauseSignals continuously from `agentharness/src/sources.json`.
+
+## TrueForge vertical slice
+
+The agent harness also exposes a bounded TrueForge workflow: a persistent session reads AlohaLive context through MCP, recomputes the deterministic match in a Daytona sandbox, and pauses for human approval before it can persist one idempotent demo introduction-request record. The approval creates a short-lived, one-use capability for the exact pending tool arguments, so a direct MCP call cannot bypass the checkpoint. It does not send a message, make a donation, deploy anything, or perform a real-world introduction.
+
+The default test suite is hermetic and needs no provider credentials:
+
+```bash
+nvm use 22
+npm --prefix agentharness ci
+npm --prefix agentharness test
+```
+
+The live evidence test is intentionally opt-in because it requires a locally configured TrueForge instance, model, Daytona sandbox provider, and MCP connector. See [`agentharness/TRUEFORGE.md`](agentharness/TRUEFORGE.md) for the exact setup, denial/approval checks, and reconnect proof.
 
 ## Branches & Deploys
 

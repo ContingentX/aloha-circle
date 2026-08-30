@@ -1,13 +1,36 @@
 import express from 'express';
 import cors from 'cors';
 import { load, insert, counts } from './store.js';
-import { matchVisitor } from './matcher.js';
+import { rankMatch } from './matcher.js';
 import { ingestOnce } from './ingest.js';
+import { handleMcpRequest, isLoopbackAddress } from './mcp.js';
+import {
+  createAlohaSession,
+  getAlohaSessionState,
+  listTrueForgeTurns,
+  respondToApproval,
+  runMatchTurn,
+} from './trueforge.js';
+
+function asyncRoute(handler) {
+  return (req, res, next) => {
+    Promise.resolve(handler(req, res, next)).catch(next);
+  };
+}
+
+export function requireLoopback(req, res, next) {
+  if (!isLoopbackAddress(req.socket?.remoteAddress)) {
+    return res.status(403).json({ error: 'agent API is loopback-only' });
+  }
+  return next();
+}
 
 export function createServer() {
   const app = express();
   app.use(cors());
   app.use(express.json());
+
+  app.all('/mcp', asyncRoute(handleMcpRequest));
 
   app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'aloha-agentharness', counts: counts() }));
 
@@ -23,7 +46,12 @@ export function createServer() {
       groupType: req.body.groupType ?? null,
       desiredInvolvement: req.body.desiredInvolvement ?? null,
     });
-    const match = matchVisitor(visitor);
+    const ranked = rankMatch(visitor, {
+      locals: load('locals'),
+      causes: load('causes'),
+      endorsements: load('endorsements'),
+    });
+    const match = ranked ? insert('matches', ranked) : null;
     res.status(201).json({ visitor, match });
   });
 
@@ -63,6 +91,54 @@ export function createServer() {
   });
   app.get('/api/matches', (_req, res) => res.json(load('matches')));
   app.post('/api/ingest', (_req, res) => res.json(ingestOnce()));
+
+  app.use('/api/agent', requireLoopback);
+
+  app.post('/api/agent/sessions', asyncRoute(async (req, res) => {
+    const { visitorId } = req.body ?? {};
+    if (!visitorId) return res.status(400).json({ error: 'visitorId is required' });
+    const session = await createAlohaSession({ visitorId });
+    res.status(201).json({ sessionId: session.id, visitorId: session.visitorId, status: session.status });
+  }));
+
+  app.get('/api/agent/sessions/:sessionId', (req, res) => {
+    try {
+      res.json(getAlohaSessionState(req.params.sessionId));
+    } catch {
+      res.status(404).json({ error: 'session not found' });
+    }
+  });
+
+  app.post('/api/agent/sessions/:sessionId/turns', asyncRoute(async (req, res) => {
+    const result = await runMatchTurn({ sessionId: req.params.sessionId });
+    res.status(201).json(result);
+  }));
+
+  app.get('/api/agent/sessions/:sessionId/turns', asyncRoute(async (req, res) => {
+    res.json(await listTrueForgeTurns({ sessionId: req.params.sessionId }));
+  }));
+
+  app.post('/api/agent/sessions/:sessionId/approvals', asyncRoute(async (req, res) => {
+    const { toolCallId, decision, reason } = req.body ?? {};
+    if (!toolCallId || !decision) return res.status(400).json({ error: 'toolCallId and decision are required' });
+    const result = await respondToApproval({
+      sessionId: req.params.sessionId,
+      toolCallId,
+      decision,
+      reason,
+    });
+    res.status(201).json(result);
+  }));
+
+  app.use((error, _req, res, _next) => {
+    // Provider errors can contain prompts or headers. Keep server logs free of
+    // user/model content and return a stable public error instead.
+    console.error('[agentharness] agent operation failed', {
+      name: error instanceof Error ? error.name : 'UnknownError',
+      code: error?.code ?? null,
+    });
+    res.status(502).json({ error: 'agent operation failed' });
+  });
 
   return app;
 }
