@@ -194,11 +194,13 @@ footer a { color: var(--ocean); }
 }
 .circle-copy h2 { margin: 0 0 10px; color: var(--ocean-deep); font-size: 1.35rem; line-height: 1.25; }
 .circle-copy p { margin: 0 0 10px; }
+/* Portrait 9:16 walkthrough — show the full frame (cropping cuts off the
+   kiʻi avatar overlay in the top-right corner). */
 .circle-video {
-  flex: 0 0 46%; max-width: 46%; border-radius: 12px; background: #000;
-  aspect-ratio: 16 / 9; object-fit: cover;
+  flex: 0 0 300px; max-width: 300px; border-radius: 12px; background: #000;
+  aspect-ratio: 9 / 16;
 }
 @media (max-width: 720px) {
   .circle-row { flex-direction: column; }
-  .circle-video { flex: none; max-width: 100%; width: 100%; }
+  .circle-video { flex: none; width: 100%; max-width: 300px; margin: 0 auto; }
 }
