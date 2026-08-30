@@ -11,10 +11,14 @@
   "scripts": {
     "start": "node src/index.js",
     "ingest": "node src/index.js --ingest-once",
+    "demo:brightdata-bridge": "node demo/brightdata-mcp-bridge.mjs",
+    "smoke:brightdata-bridge": "node demo/brightdata-bridge-smoke.mjs",
     "test": "node --test test/*.test.js",
+    "test:brightdata-bridge": "node --test test/brightdata-mcp-bridge.test.js",
     "test:live": "node --test test/live/*.test.js"
   },
   "dependencies": {
+    "@brightdata/mcp": "2.11.1",
     "@modelcontextprotocol/sdk": "1.30.0",
     "@truefoundry/trueforge-sdk": "0.1.3",
     "cors": "^2.8.5",
