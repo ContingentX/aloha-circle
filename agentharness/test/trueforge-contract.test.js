@@ -82,7 +82,7 @@ test('MCP tools and TrueForge manifest enforce the vertical-slice contract', asy
   const { createServer } = server;
 
   store.seedIfEmpty(path.join(HARNESS_DIR, 'fixtures', 'seed.json'));
-  ingestOnce();
+  await ingestOnce();
   const visitor = store.insert('visitors', { name: 'Contract Visitor', interests: ['diving', 'ocean'] });
   const trueforgeSessionId = 'sess-contract-1';
   const appSession = await trueforge.createAlohaSession({

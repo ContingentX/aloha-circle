@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { TrueForge, isEventDelta, mergeEventDelta } from '@truefoundry/trueforge-sdk';
 import { findById, insert, load, updateById } from './store.js';
 import { introductionArgumentsFromToolCall, introductionArgumentsHash } from './introductions.js';
+import { buildAdvisoryContext } from './mem0.js';
 
 function requiredConfig(value, name) {
   if (!value) throw new Error(`${name} is required`);
@@ -141,12 +142,36 @@ export async function createAlohaSession({ visitorId, client = createTrueForgeCl
   });
 }
 
-export async function runMatchTurn({ sessionId, client = createTrueForgeClient() } = {}) {
+export async function runMatchTurn({
+  sessionId,
+  client = createTrueForgeClient(),
+  memoryAdapter = null,
+  memoryConsent = false,
+} = {}) {
   const session = getAlohaSession(sessionId);
+  // Advisory-only memory context: recalled solely when a caller injects both
+  // a memory adapter and explicit consent, scoped to this session's visitor.
+  // It never touches the MCP oracle, scoring, approval gate, or product store.
+  let advisoryContext = '';
+  if (memoryAdapter && memoryConsent === true) {
+    try {
+      const visitorKey = memoryAdapter.visitorKeyFor(session.visitorId);
+      const recalled = await memoryAdapter.search({
+        visitorKey,
+        query: 'match preferences',
+        limit: 5,
+        consent: true,
+      });
+      advisoryContext = buildAdvisoryContext(recalled);
+    } catch {
+      advisoryContext = '';
+    }
+  }
   const prompt = [
     `Match visitor ${session.visitorId} in TrueForge session ${session.trueforgeSessionId}.`,
     'Fetch the domain context through MCP, recompute the score in the sandbox, compare with the oracle,',
     'then propose and request exactly one demo introduction record.',
+    ...(advisoryContext ? [advisoryContext] : []),
   ].join(' ');
   const stream = await client.sessions.createTurnStream(session.trueforgeSessionId, {
     input: [{ type: 'user.message', content: prompt }],

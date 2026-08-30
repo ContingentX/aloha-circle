@@ -14,7 +14,7 @@ if (seedIfEmpty(path.join(HARNESS_DIR, 'fixtures', 'seed.json'))) {
 }
 
 if (process.argv.includes('--ingest-once')) {
-  console.log(JSON.stringify(ingestOnce(), null, 2));
+  console.log(JSON.stringify(await ingestOnce(), null, 2));
   process.exit(0);
 }
 
