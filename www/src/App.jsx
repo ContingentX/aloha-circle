@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './auth.jsx';
 import { AuthButton, LocalVerifyCard, NpoVerifyCard } from './Verify.jsx';
 import { DonationWheel, ExperienceManager } from './Wheel.jsx';
 import { LiveStrip, CauseScroller } from './Causes.jsx';
+import { World } from './World.jsx';
 import { AlohaCircle } from './AlohaCircle.jsx';
 import { FEATURED_NONPROFITS } from './nonprofits.js';
 
@@ -283,7 +284,8 @@ export default function App() {
   const [view, setView] = useState('home'); // 'home' | 'account'
   return (
     <AuthProvider>
-    <div className="page">
+    <World />
+    <div className="page" id="app">
       <header>
         <div className="header-row">
           <h1>Aloha<span className="accent">Live</span></h1>
