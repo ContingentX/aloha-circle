@@ -17,6 +17,10 @@ body {
   min-height: 100vh;
 }
 
+/* Full-bleed wrapper above the hero's fixed layers: during the end-of-track
+   handoff the app slides over the final scene, so it needs its own opaque
+   background (top color matches the hero's --sw-bg for an invisible seam). */
+.page-wrap { position: relative; z-index: 200; background: linear-gradient(180deg, #fdf6ec 0%, #e8f4f8 100%); }
 .page { max-width: 720px; margin: 0 auto; padding: 24px 16px 48px; }
 
 header h1 { font-size: 2.6rem; margin: 0; color: var(--ocean-deep); }
@@ -204,3 +208,6 @@ footer a { color: var(--ocean); }
   .circle-row { flex-direction: column; }
   .circle-video { flex: none; width: 100%; max-width: 300px; margin: 0 auto; }
 }
+
+/* ── Scroll-world hero ─────────────────────────────────────────────────── */
+.world-hero { --sw-bg: #fdf6ec; --sw-ink: #073b57; --sw-accent: #ff6b57; }
