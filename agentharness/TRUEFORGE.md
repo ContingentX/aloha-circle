@@ -43,6 +43,29 @@ export TRUEFORGE_BASE_URL='http://127.0.0.1:8790'
 
 If the local TrueForge installation requires a token, export `TRUEFORGE_TOKEN` only in that shell. Never write it to this repository. The harness never logs the token or model/provider error text.
 
+### Fastest live Bright Data web enrichment
+
+This optional connector gives the TrueForge agent live web enrichment without adding Bright Data credentials to the repository or agent spec:
+
+1. Open TrueForge **Settings → Connectors**.
+2. Choose **Add MCP Server**.
+3. Name it `brightdata-live`.
+4. Enter this remote MCP URL, replacing the placeholder locally in TrueForge:
+
+   ```text
+   https://mcp.brightdata.com/mcp?token=<API token entered locally>
+   ```
+
+5. Save the connector, then export only its registered name in the shell that creates the agent:
+
+   ```bash
+   export TRUEFORGE_BRIGHTDATA_MCP_SERVER='brightdata-live'
+   ```
+
+Never commit, paste into an agent prompt, or log the API token. TrueForge stores the credential in the connector configuration; the agent definition receives only the connector name. See the official [Bright Data hosted MCP setup](https://docs.brightdata.com/ai/mcp-server/integrations/n8n) and [TrueForge MCP server setup](https://trueforge.dev/mcp-servers).
+
+When configured, the agent may use only `search_engine` to find current Maui community needs and `scrape_as_markdown` to read one selected source. This is live, untrusted advisory web evidence with a source URL. It does not write to DynamoDB, alter deterministic oracle IDs or scores, execute an introduction, or feed the custom Bright Data-to-`CauseSignal` persistence pipeline in `src/ingest.js`.
+
 The harness binds to `127.0.0.1` by default. The MCP endpoint independently requires both a loopback peer address and an allowed loopback Host header, so spoofing `Host: localhost` from a LAN client is insufficient. Run TrueForge as a host process for this local slice; do not expose the MCP endpoint to a container bridge, LAN, or public interface.
 
 ## Live evidence test
