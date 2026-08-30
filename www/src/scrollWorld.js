@@ -91,6 +91,8 @@ function mountScrollWorld(container, config) {
   if (!N) return () => {};
   let disposed = false;
   let rafId = 0;
+  let readRafId = 0;
+  const fetchControllers = new Set();  // in-flight clip downloads, aborted on unmount
 
   injectCSS();
   container.classList.add('sw-root');
@@ -217,8 +219,13 @@ function mountScrollWorld(container, config) {
     s.loading = true;
     // Serve the lighter mobile encode on phones when one was provided.
     const url = (isMobile() && s.clipM) ? s.clipM : s.clip;
-    fetch(url).then(r => r.ok ? r.blob() : Promise.reject(new Error('404')))
+    // Abortable: teardown mid-download must not keep pulling 1080p media
+    // (StrictMode's mount→cleanup→mount replay would otherwise fetch twice).
+    const ctrl = new AbortController();
+    fetchControllers.add(ctrl);
+    fetch(url, { signal: ctrl.signal }).then(r => r.ok ? r.blob() : Promise.reject(new Error('404')))
       .then(blob => {
+        fetchControllers.delete(ctrl);
         if (disposed) return;
         const v = document.createElement('video');
         v.className = 'sw-scene__video';
@@ -232,10 +239,11 @@ function mountScrollWorld(container, config) {
         v.addEventListener('seeked', () => { s.el.classList.add('has-clip'); }, { once: true });
         v.addEventListener('loadeddata', () => { try { v.pause(); } catch (e) {} if (userReady) primeVideo(v); });
         s.el.appendChild(v); s.video = v; s.hasClip = true;
-      }).catch(() => { s.loading = false; });
+      }).catch(() => { fetchControllers.delete(ctrl); s.loading = false; });
   }
 
   function read() {
+    if (disposed) return;
     const y = window.scrollY || window.pageYOffset;
     const fade = CROSSFADE * vh;
     // End-of-track handoff: over the final +1vh of runway the page content below
@@ -339,7 +347,7 @@ function mountScrollWorld(container, config) {
 
   // Particles are a per-frame cost we can't afford alongside video scrubbing on a phone.
   seedParticles(particles, reduce || coarse);
-  function onScroll() { if (!ticking) { ticking = true; requestAnimationFrame(read); } }
+  function onScroll() { if (!ticking) { ticking = true; readRafId = requestAnimationFrame(read); } }
   window.addEventListener('scroll', onScroll, { passive: true });
   // Mobile browsers fire `resize` every time the URL bar slides in/out. Re-running
   // layout() there rebuilds the track height and yanks the scroll position, so on
@@ -362,6 +370,9 @@ function mountScrollWorld(container, config) {
     if (disposed) return;
     disposed = true;
     cancelAnimationFrame(rafId);
+    cancelAnimationFrame(readRafId);   // a scroll just before unmount queues read()
+    fetchControllers.forEach(c => { try { c.abort(); } catch (e) {} });
+    fetchControllers.clear();
     window.removeEventListener('scroll', onScroll);
     window.removeEventListener('resize', onResize);
     window.removeEventListener('orientationchange', layout);
