@@ -7,7 +7,7 @@
    rendered page, anything.
 
    USAGE
-     mountScrollWorld(document.getElementById('world'), {
+     const unmount = mountScrollWorld(document.getElementById('world'), {
        brand: { name: 'Pearl & Co.', href: '#top' },
        diveScroll: 1.3,   // viewport-heights of scroll per dive clip
        connScroll: 0.9,   // ...per connector clip
@@ -34,7 +34,8 @@
        - loads `clipMobile` / `connectorsMobile` when provided (encode these smaller +
          tighter-GOP — seek cost on a phone decoder is dominated by frames-from-keyframe,
          so a 720p, -g 4 file scrubs far smoother than the 1080p desktop master; see
-         pipeline.md). Falls back to the desktop `clip` if no mobile variant is given.
+         pipeline.md). When no mobile variant is given, phones keep the still posters
+         (cross-dissolving as you scroll) instead of downloading the desktop masters.
        - uses `stillMobile` as the scene poster when provided (pair it with native 9:16
          clipMobile renders so the poster matches the portrait video's first frame instead
          of flashing from a landscape crop). Chosen once at mount; a desktop resize into
@@ -61,6 +62,15 @@
      - (optional) mobile variants at ~720p, -g 4 for smoother phone scrubbing
    The engine loads each clip as a Blob (always seekable) and scrubs currentTime; it does
    NOT depend on HTTP byte-range support.
+
+   HANDOFF & TEARDOWN
+     Content that follows the container in normal flow (give it position:relative and a
+     z-index above 120, with its own opaque background) slides over the final scene
+     during the last viewport-height of track. Once it reaches the top the container
+     gets `.sw-done` and every fixed layer is hidden and released — scroll back up and
+     the flight resumes. mountScrollWorld returns an unmount function (cancels the RAF
+     loop, removes listeners, revokes clip blob URLs, empties the container), so
+     React StrictMode effect replays and SPA route changes don't leak engines.
    ========================================================================== */
 
 function mountScrollWorld(container, config) {
@@ -78,7 +88,11 @@ function mountScrollWorld(container, config) {
   const CONN_W = config.connScroll || 0.9;
   const CROSSFADE = (config.crossfade != null) ? config.crossfade : 0.12;  // seam dissolve width (vh)
   const N = SECTIONS.length;
-  if (!N) return;
+  if (!N) return () => {};
+  let disposed = false;
+  let rafId = 0;
+  let readRafId = 0;
+  const fetchControllers = new Set();  // in-flight clip downloads, aborted on unmount
 
   injectCSS();
   container.classList.add('sw-root');
@@ -199,11 +213,20 @@ function mountScrollWorld(container, config) {
     // Under prefers-reduced-motion we never load the clips at all — the stills stay up
     // and simply cross-dissolve as you scroll. No scrubbed video motion, no decode cost.
     if (reduce || s.loading || !s.clip) return;
+    // Phones with no mobile encode keep the still posters (the stated degrade) —
+    // never pull the 1080p desktop masters onto a constrained device.
+    if (isMobile() && !s.clipM) return;
     s.loading = true;
     // Serve the lighter mobile encode on phones when one was provided.
     const url = (isMobile() && s.clipM) ? s.clipM : s.clip;
-    fetch(url).then(r => r.ok ? r.blob() : Promise.reject(new Error('404')))
+    // Abortable: teardown mid-download must not keep pulling 1080p media
+    // (StrictMode's mount→cleanup→mount replay would otherwise fetch twice).
+    const ctrl = new AbortController();
+    fetchControllers.add(ctrl);
+    fetch(url, { signal: ctrl.signal }).then(r => r.ok ? r.blob() : Promise.reject(new Error('404')))
       .then(blob => {
+        fetchControllers.delete(ctrl);
+        if (disposed) return;
         const v = document.createElement('video');
         v.className = 'sw-scene__video';
         v.muted = true; v.playsInline = true; v.preload = 'auto';
@@ -216,12 +239,16 @@ function mountScrollWorld(container, config) {
         v.addEventListener('seeked', () => { s.el.classList.add('has-clip'); }, { once: true });
         v.addEventListener('loadeddata', () => { try { v.pause(); } catch (e) {} if (userReady) primeVideo(v); });
         s.el.appendChild(v); s.video = v; s.hasClip = true;
-      }).catch(() => { s.loading = false; });
+      }).catch(() => { fetchControllers.delete(ctrl); s.loading = false; });
   }
 
   function read() {
+    if (disposed) return;
     const y = window.scrollY || window.pageYOffset;
     const fade = CROSSFADE * vh;
+    // End-of-track handoff: over the final +1vh of runway the page content below
+    // slides up over the last scene; handoff goes 0→1 as it reaches the top.
+    const handoff = clamp((y - totalW * vh) / vh);
     let ci = 0;
     for (let i = 0; i < NSEG; i++) if (y >= SEGMENTS[i].start) ci = i;
 
@@ -247,7 +274,7 @@ function mountScrollWorld(container, config) {
       const before = y < seg.start, after = y > seg.end;
       let cop;
       if (i === 0) cop = after ? 0 : smooth(1 - pr / 0.62);            // greets on landing
-      else if (i === N - 1) cop = before ? 0 : smooth(pr / 0.4);       // holds CTA at the end
+      else if (i === N - 1) cop = before ? 0 : smooth(pr / 0.4) * smooth(1 - handoff); // holds CTA, then yields to the page
       else cop = (before || after) ? 0 : smooth(1 - Math.abs(pr - 0.5) / 0.5);
       const c = copies[i];
       c.style.opacity = cop;
@@ -267,10 +294,22 @@ function mountScrollWorld(container, config) {
     scrollbarFill.style.transform = `scaleX(${clamp(y / (totalW * vh))})`;
     hint.style.opacity = clamp(1 - y / (0.5 * vh));
     if (particles) particles.style.transform = `translate3d(0, ${-y * 0.05}px, 0)`;
+
+    // Fade the fixed chrome out with the handoff and fully release every fixed
+    // layer (.sw-done → visibility:hidden) once the page owns the viewport, so
+    // nothing keeps covering the app or intercepting its touches. Scrolling
+    // back up reverses all of it and the flight resumes.
+    const chromeOp = smooth(1 - handoff);
+    [topbar, route, scrollbar].forEach(n => {
+      n.style.opacity = chromeOp;
+      n.style.pointerEvents = handoff > 0.05 ? 'none' : '';
+    });
+    container.classList.toggle('sw-done', handoff >= 0.999);
     ticking = false;
   }
 
   function raf() {
+    if (disposed) return;
     const eps = isMobile() ? 0.02 : 0.008;   // coarser seek step on phones = fewer decodes
     for (let i = 0; i < NSEG; i++) {
       const s = SEGMENTS[i];
@@ -285,7 +324,7 @@ function mountScrollWorld(container, config) {
       const t = clamp(s.cur, 0, 0.999) * dur;
       if (Math.abs(s.video.currentTime - t) > eps) { try { s.video.currentTime = t; } catch (e) {} }
     }
-    requestAnimationFrame(raf);
+    rafId = requestAnimationFrame(raf);
   }
 
   // iOS needs a user gesture before a muted video will decode/paint reliably. On the
@@ -308,7 +347,8 @@ function mountScrollWorld(container, config) {
 
   // Particles are a per-frame cost we can't afford alongside video scrubbing on a phone.
   seedParticles(particles, reduce || coarse);
-  window.addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(read); } }, { passive: true });
+  function onScroll() { if (!ticking) { ticking = true; readRafId = requestAnimationFrame(read); } }
+  window.addEventListener('scroll', onScroll, { passive: true });
   // Mobile browsers fire `resize` every time the URL bar slides in/out. Re-running
   // layout() there rebuilds the track height and yanks the scroll position, so on
   // touch we ignore height-only changes and only relayout when the width actually
@@ -322,7 +362,29 @@ function mountScrollWorld(container, config) {
   window.addEventListener('orientationchange', layout);
   window.addEventListener('load', layout);
   layout();
-  requestAnimationFrame(raf);
+  rafId = requestAnimationFrame(raf);
+
+  // Full teardown: safe under React StrictMode's mount→cleanup→mount replay
+  // and SPA route changes. The injected <style id="sw-css"> stays (idempotent).
+  return function unmount() {
+    if (disposed) return;
+    disposed = true;
+    cancelAnimationFrame(rafId);
+    cancelAnimationFrame(readRafId);   // a scroll just before unmount queues read()
+    fetchControllers.forEach(c => { try { c.abort(); } catch (e) {} });
+    fetchControllers.clear();
+    window.removeEventListener('scroll', onScroll);
+    window.removeEventListener('resize', onResize);
+    window.removeEventListener('orientationchange', layout);
+    window.removeEventListener('load', layout);
+    window.removeEventListener('pointerdown', onFirstGesture);
+    window.removeEventListener('touchstart', onFirstGesture);
+    SEGMENTS.forEach(s => {
+      if (s.video) { try { URL.revokeObjectURL(s.video.src); } catch (e) {} s.video = null; }
+    });
+    container.replaceChildren();
+    container.classList.remove('sw-root', 'sw-done');
+  };
 
   // ---- helpers ----
   function el(tag, cls) { const n = document.createElement(tag); if (cls) n.className = cls; return n; }
@@ -410,6 +472,7 @@ function injectCSS() {
   .sw-hint i::after{content:"";position:absolute;left:50%;top:7px;width:4px;height:7px;border-radius:2px;background:var(--sw-accent);transform:translateX(-50%);animation:sw-wheel 1.7s ease-in-out infinite;}
   @keyframes sw-wheel{0%{opacity:0;top:6px}40%{opacity:1}100%{opacity:0;top:17px}}
   .sw-track{position:relative;z-index:1;width:100%;pointer-events:none;}
+  .sw-root.sw-done .sw-sky,.sw-root.sw-done .sw-stage,.sw-root.sw-done .sw-copylayer,.sw-root.sw-done .sw-topbar,.sw-root.sw-done .sw-route,.sw-root.sw-done .sw-hint,.sw-root.sw-done .sw-scrollbar{visibility:hidden;}
   @media (max-width:860px){
     .sw-nav{display:none;}
     .sw-copylayer::before{width:100%;height:60%;top:auto;bottom:0;background:linear-gradient(0deg,var(--sw-bg) 8%,color-mix(in srgb,var(--sw-bg) 70%,transparent) 46%,transparent 100%);}
