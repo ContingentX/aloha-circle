@@ -9,7 +9,7 @@
 //          GET /api/health · GET /api/nonprofits · GET /api/causes
 //          POST /api/visitors · POST /api/locals · POST /api/endorsements
 // Authed:  GET /me · POST /profile · POST /npo/claim · POST /npo/send-code
-//          POST /npo/verify-code · POST /local/submit
+//          POST /npo/verify-code · POST /local/submit · POST /local/confirm
 //          POST /api/nonprofits (one pending submission per account/day)
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
@@ -247,13 +247,27 @@ async function localSubmit(user, body, origin) {
     new PutObjectCommand({ Bucket: BUCKET, Key: key, ContentType: contentType }),
     { expiresIn: 600 },
   );
+  // Keep verification unset until the client confirms the S3 upload succeeded.
   await ddb.send(new UpdateCommand({
     TableName: TABLE, Key: { PK: `USER#${user.uid}`, SK: 'PROFILE' },
-    UpdateExpression: 'SET #r = :r, airport = :a, ver_status = :s, ver_method = :m, ver_billKey = :k, email = :e',
+    UpdateExpression: 'SET #r = :r, airport = :a, ver_billKey = :k, email = :e',
     ExpressionAttributeNames: { '#r': 'role' },
-    ExpressionAttributeValues: { ':r': 'local', ':a': airport, ':s': 'pending', ':m': 'bill-photo', ':k': key, ':e': user.email },
+    ExpressionAttributeValues: { ':r': 'local', ':a': airport, ':k': key, ':e': user.email },
   }));
   return resp(200, { uploadUrl, key }, origin);
+}
+
+async function localConfirm(user, body, origin) {
+  const profile = await getProfile(user.uid);
+  if (!profile?.ver_billKey || profile.ver_billKey !== String(body.key ?? '')) {
+    return resp(400, { error: 'no matching upload — submit your document first' }, origin);
+  }
+  await ddb.send(new UpdateCommand({
+    TableName: TABLE, Key: { PK: `USER#${user.uid}`, SK: 'PROFILE' },
+    UpdateExpression: 'SET ver_status = :s, ver_method = :m',
+    ExpressionAttributeValues: { ':s': 'pending', ':m': 'bill-photo' },
+  }));
+  return me(user, origin);
 }
 
 // ---- public data plane (/api/*) ----
@@ -451,6 +465,7 @@ export const handler = async (event) => {
     if (method === 'POST' && path === '/npo/send-code') return await npoSendCode(user, requestBody, origin);
     if (method === 'POST' && path === '/npo/verify-code') return await npoVerifyCode(user, requestBody, origin);
     if (method === 'POST' && path === '/local/submit') return await localSubmit(user, requestBody, origin);
+    if (method === 'POST' && path === '/local/confirm') return await localConfirm(user, requestBody, origin);
     if (method === 'POST' && path === '/experiences') return await createExperience(user, requestBody, origin);
     return resp(404, { error: 'not found' }, origin);
   } catch (err) {

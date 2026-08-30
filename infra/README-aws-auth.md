@@ -41,7 +41,8 @@ contract metadata on recognized legacy fixture rows. The Aloha agent updates
 the site by conditionally writing those same versioned DynamoDB items.
 Authed (`Authorization: Bearer <Firebase ID token>`): `GET /me`,
 `POST /profile`, `POST /npo/claim`, `POST /npo/send-code`,
-`POST /npo/verify-code`, `POST /local/submit`, `POST /experiences`
+`POST /npo/verify-code`, `POST /local/submit`, `POST /local/confirm`
+(after the client's S3 upload succeeds), `POST /experiences`
 (verified nonprofits only), and `POST /api/nonprofits`. Nonprofit listing
 submissions are pending for at most 30 days and are atomically limited to one
 per authenticated account per UTC day by the pending record's conditional
@@ -79,7 +80,9 @@ cannot influence public trust counts or matching.
 `infra/deploy.sh <dev|prod>` deploys the site stack, the `alohalive-donations`
 stack, backfills the demo contract fields, uploads the Lambda code, waits for
 it, and smoke-tests the public API. The frontend uses `VITE_API_BASE` when
-supplied and otherwise discovers the deployed `ApiEndpoint` stack output.
+supplied and otherwise discovers the deployed `ApiEndpoint` stack output. The
+frontend resolves `VITE_API`, then `VITE_API_BASE`, then the deployed-endpoint
+fallback in `www/src/appApi.js`.
 
 ## Reviewing local (bill-photo) verifications
 

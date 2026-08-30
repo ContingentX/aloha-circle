@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './auth.jsx';
 import { AuthButton, LocalVerifyCard, NpoVerifyCard } from './Verify.jsx';
 import { DonationWheel, ExperienceManager } from './Wheel.jsx';
 import { LiveStrip, CauseScroller } from './Causes.jsx';
+import { World } from './World.jsx';
 import { AlohaCircle } from './AlohaCircle.jsx';
 import { FEATURED_NONPROFITS } from './nonprofits.js';
 
@@ -296,6 +297,11 @@ export default function App() {
   const [view, setView] = useState('home'); // 'home' | 'account'
   return (
     <AuthProvider>
+    <World />
+    {/* page-wrap paints above the hero's fixed layers (z-index > the stage's 120)
+        so the app slides over the final scene and lands at the top of the screen;
+        #app moves here so CTA anchors land at the true top. */}
+    <div className="page-wrap" id="app">
     <div className="page">
       <header>
         <div className="header-row">
@@ -309,8 +315,9 @@ export default function App() {
         <AccountSection onClose={() => setView('home')} />
       ) : (
         <>
-          <CauseScroller />
+          {/* The scroll flight lands here: Circle of Aloha explainer + video first. */}
           <AlohaCircle />
+          <CauseScroller />
           <main>
             <DonationWheel />
             <VisitorTab />
@@ -320,6 +327,7 @@ export default function App() {
       <footer>
         <p>The Aloha Circle · Kahului Airport (OGG) · <a href="https://alohalive.net">alohalive.net</a></p>
       </footer>
+    </div>
     </div>
     </AuthProvider>
   );
