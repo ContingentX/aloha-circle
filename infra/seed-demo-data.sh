@@ -44,8 +44,22 @@ for i in range(0, len(items), 25):
     print(json.dumps(chunk, ensure_ascii=False))
 EOF
   echo "$chunk" > /tmp/alohalive-seed-chunk.json
-  aws dynamodb batch-write-item --region "$REGION" \
-    --request-items file:///tmp/alohalive-seed-chunk.json \
-    --query 'UnprocessedItems' --output json
+  # batch-write-item can return UnprocessedItems under throttling — retry them
+  # (the response shape is valid --request-items input) with backoff.
+  UNPROCESSED=""
+  for attempt in 1 2 3 4 5; do
+    UNPROCESSED="$(aws dynamodb batch-write-item --region "$REGION" \
+      --request-items file:///tmp/alohalive-seed-chunk.json \
+      --query 'UnprocessedItems' --output json)"
+    [ "$UNPROCESSED" = "{}" ] && break
+    echo "==> Retrying unprocessed items (attempt $attempt)" >&2
+    echo "$UNPROCESSED" > /tmp/alohalive-seed-chunk.json
+    sleep "$attempt"
+  done
+  if [ "$UNPROCESSED" != "{}" ]; then
+    echo "!! Seed incomplete — unprocessed items remain after retries:" >&2
+    echo "$UNPROCESSED" >&2
+    exit 1
+  fi
 done
 echo "==> Seeded demo data into table '$TABLE'"

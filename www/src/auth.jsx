@@ -21,12 +21,20 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [ready, setReady] = useState(false);
+  const [profileError, setProfileError] = useState(null);
 
   const refreshProfile = useCallback(async () => {
     if (!auth.currentUser) { setProfile(null); return null; }
-    const { profile } = await appApi.me();
-    setProfile(profile);
-    return profile;
+    try {
+      const { profile } = await appApi.me();
+      setProfile(profile);
+      setProfileError(null);
+      return profile;
+    } catch (err) {
+      // surface API-unreachable instead of silently degrading (AGENTS.md rule)
+      setProfileError('The AlohaLive profile service is unreachable right now — verification and donations may be limited.');
+      throw err;
+    }
   }, []);
 
   useEffect(
@@ -73,14 +81,16 @@ export function AuthProvider({ children }) {
   // Local: airport + a photo of a bill showing a local address, uploaded
   // straight to S3 via a presigned URL; review flips pending -> verified.
   const submitLocalVerification = async (airport, file) => {
-    const { uploadUrl } = await appApi.localSubmit(airport, file.type);
+    const { uploadUrl, key } = await appApi.localSubmit(airport, file.type);
     const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'content-type': file.type }, body: file });
     if (!put.ok) throw new Error('upload failed — please try again');
+    // only after the S3 PUT succeeds does the profile go pending
+    await appApi.localConfirm(key);
     await refreshProfile();
   };
 
   const value = {
-    user, profile, ready,
+    user, profile, ready, profileError,
     signInWithGoogle,
     signOutUser: () => signOut(auth),
     saveProfile,

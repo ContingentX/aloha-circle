@@ -46,8 +46,8 @@ Release flow: PR feature → `dev` (auto-deploys dev site) → PR `dev` → `pro
 
 ## Qodo Code Review Evidence
 
-_Placeholder — every PR in this repo is reviewed by Qodo. PR links and findings addressed will be listed here._
+_Every PR in this repo is reviewed by Qodo. PR links and findings addressed are listed here._
 
 | PR | Qodo findings | Resolution |
 |----|---------------|------------|
-| — | — | — |
+| [#19 prod deploy](https://github.com/ContingentX/alohalive/pull/19) | 19 findings (12 bugs, 7 rule violations): spin race + lost retry path, raceable code-attempt cap, unpaginated scans, `VITE_API` vs `VITE_API_BASE` mismatch, hard-coded dev bridge in the app, non-OGG boarding passes verifying travelers, seed script dropping throttled writes, upload-before-pending trap, silent profile errors, missing CauseSignal fields, matcher tie-break, and more | Triaged in follow-up PR to `dev` (`fix/qodo-pr19-feedback`): 13 fixed; Stripe Connect payouts, per-env backend stacks, endorsement auth, and unforgeable traveler evidence deferred as product/infra decisions; static nonprofit rail and template location rejected as intentional |

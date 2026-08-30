@@ -68,7 +68,11 @@ export default function BoardingPassCard({ profile, onSave }) {
     const parsed = parseBoardingPass(data);
     if (!parsed) return; // not a boarding pass (e.g. a URL QR) — keep scanning
     handled.current = true;
-    setPending({ from: parsed.from, dateISO: parsed.dateISO, verified: true, lang: airportLang(parsed.from) });
+    // Only a leg that lands at OGG proves Maui travel. Any other route still
+    // seeds the origin + greeting language, but stays unverified — the same
+    // footing as manual airport entry.
+    const toMaui = parsed.to === 'OGG';
+    setPending({ from: parsed.from, dateISO: toMaui ? parsed.dateISO : null, verified: toMaui, lang: airportLang(parsed.from) });
     setMode('confirm');
   };
 

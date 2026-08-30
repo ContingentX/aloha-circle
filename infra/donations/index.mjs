@@ -9,7 +9,7 @@
 //          GET /api/health · GET /api/nonprofits · GET /api/causes
 //          POST /api/visitors · POST /api/locals · POST /api/endorsements
 // Authed:  GET /me · POST /profile · POST /npo/claim · POST /npo/send-code
-//          POST /npo/verify-code · POST /local/submit
+//          POST /npo/verify-code · POST /local/submit · POST /local/confirm
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
@@ -216,12 +216,19 @@ AlohaLive`,
 async function npoVerifyCode(user, body, origin) {
   const rec = (await ddb.send(new GetCommand({ TableName: TABLE, Key: { PK: `USER#${user.uid}`, SK: 'CODE' } }))).Item;
   if (!rec || rec.ttl < Date.now() / 1000) return resp(400, { error: 'code expired — request a new one' }, origin);
-  if (rec.attempts >= 5) return resp(429, { error: 'too many attempts — request a new code' }, origin);
-  if (sha256(String(body.code ?? '').trim()) !== rec.codeHash) {
+  // Reserve an attempt atomically *before* checking the code — a separate
+  // read-then-increment would let concurrent guesses race past the cap.
+  try {
     await ddb.send(new UpdateCommand({
       TableName: TABLE, Key: { PK: `USER#${user.uid}`, SK: 'CODE' },
-      UpdateExpression: 'SET attempts = attempts + :one', ExpressionAttributeValues: { ':one': 1 },
+      UpdateExpression: 'SET attempts = attempts + :one',
+      ConditionExpression: 'attempts < :max',
+      ExpressionAttributeValues: { ':one': 1, ':max': 5 },
     }));
+  } catch {
+    return resp(429, { error: 'too many attempts — request a new code' }, origin);
+  }
+  if (sha256(String(body.code ?? '').trim()) !== rec.codeHash) {
     return resp(400, { error: 'incorrect code' }, origin);
   }
   await ddb.send(new UpdateCommand({
@@ -244,13 +251,29 @@ async function localSubmit(user, body, origin) {
     new PutObjectCommand({ Bucket: BUCKET, Key: key, ContentType: contentType }),
     { expiresIn: 600 },
   );
+  // ver_status stays untouched here: the profile only goes pending once the
+  // client confirms the S3 PUT succeeded (/local/confirm), so a failed upload
+  // leaves the form — and a retry path — in place.
   await ddb.send(new UpdateCommand({
     TableName: TABLE, Key: { PK: `USER#${user.uid}`, SK: 'PROFILE' },
-    UpdateExpression: 'SET #r = :r, airport = :a, ver_status = :s, ver_method = :m, ver_billKey = :k, email = :e',
+    UpdateExpression: 'SET #r = :r, airport = :a, ver_billKey = :k, email = :e',
     ExpressionAttributeNames: { '#r': 'role' },
-    ExpressionAttributeValues: { ':r': 'local', ':a': airport, ':s': 'pending', ':m': 'bill-photo', ':k': key, ':e': user.email },
+    ExpressionAttributeValues: { ':r': 'local', ':a': airport, ':k': key, ':e': user.email },
   }));
   return resp(200, { uploadUrl, key }, origin);
+}
+
+async function localConfirm(user, body, origin) {
+  const profile = await getProfile(user.uid);
+  if (!profile?.ver_billKey || profile.ver_billKey !== String(body.key ?? '')) {
+    return resp(400, { error: 'no matching upload — submit your document first' }, origin);
+  }
+  await ddb.send(new UpdateCommand({
+    TableName: TABLE, Key: { PK: `USER#${user.uid}`, SK: 'PROFILE' },
+    UpdateExpression: 'SET ver_status = :s, ver_method = :m',
+    ExpressionAttributeValues: { ':s': 'pending', ':m': 'bill-photo' },
+  }));
+  return me(user, origin);
 }
 
 // ---- public data plane (/api/*) ----
@@ -264,21 +287,23 @@ async function localSubmit(user, body, origin) {
 //   ENDORSE#<id>   { local, nonprofit, verdict, note? }
 //   MATCH#<id>     { visitorName, localName, localTown, cause, why, suggestedAction, score }
 
-async function scanPrefix(prefix) {
+async function scanAll(input) {
   const items = [];
   let startKey;
   do {
-    const out = await ddb.send(new ScanCommand({
-      TableName: TABLE,
-      FilterExpression: 'begins_with(PK, :p) AND SK = :sk',
-      ExpressionAttributeValues: { ':p': prefix, ':sk': 'META' },
-      ExclusiveStartKey: startKey,
-    }));
+    const out = await ddb.send(new ScanCommand({ ...input, ExclusiveStartKey: startKey }));
     items.push(...(out.Items ?? []));
     startKey = out.LastEvaluatedKey;
   } while (startKey);
   return items;
 }
+
+const scanPrefix = (prefix) =>
+  scanAll({
+    TableName: TABLE,
+    FilterExpression: 'begins_with(PK, :p) AND SK = :sk',
+    ExpressionAttributeValues: { ':p': prefix, ':sk': 'META' },
+  });
 
 const str = (v, max) => String(v ?? '').slice(0, max);
 const tags = (v, maxItems = 12) =>
@@ -304,12 +329,12 @@ async function listNonprofits(origin) {
   const [npos, endorsements, users] = await Promise.all([
     scanPrefix('NPO#'),
     scanPrefix('ENDORSE#'),
-    ddb.send(new ScanCommand({
+    scanAll({
       TableName: TABLE,
       FilterExpression: 'begins_with(PK, :p) AND SK = :sk AND #r = :np AND ver_status = :v',
       ExpressionAttributeNames: { '#r': 'role' },
       ExpressionAttributeValues: { ':p': 'USER#', ':sk': 'PROFILE', ':np': 'nonprofit', ':v': 'verified' },
-    })).then((out) => out.Items ?? []),
+    }),
   ]);
   const seededNames = new Set(npos.map((n) => (n.name ?? '').toLowerCase()));
   // verified signed-up nonprofits appear alongside the seeded/agent-written ones
@@ -333,6 +358,9 @@ async function listCauses(origin) {
     .map((c) => ({
       id: c.PK.slice(6), title: c.title, summary: c.summary,
       causeTags: c.causeTags ?? [], urgency: c.urgency ?? 1,
+      // complete the CauseSignal shape (see CLAUDE.md): pass provenance through
+      source: c.source ?? null, url: c.url ?? null,
+      fetchedAt: c.fetchedAt ?? c.createdAt ?? null,
     }))
     .sort((a, b) => (b.urgency ?? 0) - (a.urgency ?? 0));
   return resp(200, causes, origin);
@@ -354,6 +382,12 @@ async function createVisitor(body, origin) {
   const [locals, causes, endorsements] = await Promise.all([
     scanPrefix('LOCAL#'), scanPrefix('CAUSE#'), scanPrefix('ENDORSE#'),
   ]);
+  // DynamoDB scan order isn't stable, so sort candidates by key before scoring:
+  // equal scores then always resolve to the same (local, cause) pair — the
+  // matcher must stay deterministic (see CLAUDE.md).
+  const byPK = (a, b) => a.PK.localeCompare(b.PK);
+  locals.sort(byPK);
+  causes.sort(byPK);
   const verdictWeight = { helping_now: 2, generally_helping: 1, not_sure: 0, causing_concern: -3 };
   let best = null;
   for (const local of locals) {
@@ -417,12 +451,12 @@ async function createEndorsement(body, origin) {
 
 // ---- experiences ----
 async function listExperiences(origin) {
-  const out = await ddb.send(new ScanCommand({
+  const items = await scanAll({
     TableName: TABLE,
     FilterExpression: 'begins_with(PK, :p) AND SK = :sk AND active = :t',
     ExpressionAttributeValues: { ':p': 'EXP#', ':sk': 'META', ':t': true },
-  }));
-  const experiences = (out.Items ?? [])
+  });
+  const experiences = items
     .map((i) => ({
       id: i.PK.slice(4), title: i.title, description: i.description,
       value: i.value, minDonation: i.minDonation, perDay: i.perDay, perMonth: i.perMonth, npoUid: i.npoUid,
@@ -493,10 +527,17 @@ async function bumpCounter(experienceId, period, cap) {
   }));
 }
 
+const SPIN_STALE_MS = 60e3;
+
 async function spin(sessionId, origin) {
   if (!/^cs_[a-zA-Z0-9_]+$/.test(sessionId ?? '')) return resp(400, { error: 'bad session id' }, origin);
   const prior = (await ddb.send(new GetCommand({ TableName: TABLE, Key: { PK: `DON#${sessionId}`, SK: 'META' } }))).Item;
-  if (prior) return resp(200, { won: prior.won, title: prior.title, amountUsd: prior.amountUsd }, origin);
+  // Only a finished record is final — records written before allocation carry
+  // status 'processing' and must never be returned as a losing result.
+  // (Legacy records without a status field were written post-allocation.)
+  if (prior && prior.status !== 'processing') {
+    return resp(200, { won: prior.won, title: prior.title, amountUsd: prior.amountUsd }, origin);
+  }
 
   let session;
   try {
@@ -508,17 +549,37 @@ async function spin(sessionId, origin) {
   const experienceId = session.metadata?.experienceId ?? '';
   const exp = (await ddb.send(new GetCommand({ TableName: TABLE, Key: { PK: `EXP#${experienceId}`, SK: 'META' } }))).Item;
   const amountUsd = (session.amount_total ?? 0) / 100;
+  const now = Date.now();
 
-  // claim the donation record first (idempotency lock)
-  try {
-    await ddb.send(new PutCommand({
-      TableName: TABLE,
-      Item: { PK: `DON#${sessionId}`, SK: 'META', experienceId, amountUsd, won: false, title: exp?.title ?? '', npoUid: exp?.npoUid ?? '', day: hstDay(), createdAt: new Date().toISOString() },
-      ConditionExpression: 'attribute_not_exists(PK)',
-    }));
-  } catch {
-    const raced = (await ddb.send(new GetCommand({ TableName: TABLE, Key: { PK: `DON#${sessionId}`, SK: 'META' } }))).Item;
-    return resp(200, { won: raced?.won ?? false, title: raced?.title ?? '', amountUsd }, origin);
+  if (!prior) {
+    // claim the donation record first (idempotency lock; provisional until
+    // status flips to 'done' after prize allocation)
+    try {
+      await ddb.send(new PutCommand({
+        TableName: TABLE,
+        Item: { PK: `DON#${sessionId}`, SK: 'META', experienceId, amountUsd, won: false, status: 'processing', claimTs: now, title: exp?.title ?? '', npoUid: exp?.npoUid ?? '', day: hstDay(), createdAt: new Date().toISOString() },
+        ConditionExpression: 'attribute_not_exists(PK)',
+      }));
+    } catch {
+      // a concurrent request holds the claim — tell the client to poll again
+      return resp(202, { pending: true }, origin);
+    }
+  } else {
+    // 'processing' record: a fresh one is still being worked (poll again); a
+    // stale one means the earlier invocation died mid-allocation, so take over
+    // the claim. (Rare double-allocation on takeover costs at most a giveaway
+    // slot — better than silently converting a winning spin into a loss.)
+    try {
+      await ddb.send(new UpdateCommand({
+        TableName: TABLE, Key: { PK: `DON#${sessionId}`, SK: 'META' },
+        UpdateExpression: 'SET claimTs = :now',
+        ConditionExpression: '#s = :p AND claimTs < :stale',
+        ExpressionAttributeNames: { '#s': 'status' },
+        ExpressionAttributeValues: { ':now': now, ':p': 'processing', ':stale': now - SPIN_STALE_MS },
+      }));
+    } catch {
+      return resp(202, { pending: true }, origin);
+    }
   }
 
   let won = false;
@@ -538,12 +599,13 @@ async function spin(sessionId, origin) {
       }
     } catch { /* day cap hit */ }
   }
-  if (won) {
-    await ddb.send(new UpdateCommand({
-      TableName: TABLE, Key: { PK: `DON#${sessionId}`, SK: 'META' },
-      UpdateExpression: 'SET won = :w', ExpressionAttributeValues: { ':w': true },
-    }));
-  }
+  // finalize: the outcome only becomes authoritative once status is 'done'
+  await ddb.send(new UpdateCommand({
+    TableName: TABLE, Key: { PK: `DON#${sessionId}`, SK: 'META' },
+    UpdateExpression: 'SET won = :w, #s = :done',
+    ExpressionAttributeNames: { '#s': 'status' },
+    ExpressionAttributeValues: { ':w': won, ':done': 'done' },
+  }));
   return resp(200, { won, title: exp?.title ?? '', amountUsd }, origin);
 }
 
@@ -575,6 +637,7 @@ export const handler = async (event) => {
     if (method === 'POST' && path === '/npo/send-code') return await npoSendCode(user, body, origin);
     if (method === 'POST' && path === '/npo/verify-code') return await npoVerifyCode(user, body, origin);
     if (method === 'POST' && path === '/local/submit') return await localSubmit(user, body, origin);
+    if (method === 'POST' && path === '/local/confirm') return await localConfirm(user, body, origin);
     if (method === 'POST' && path === '/experiences') return await createExperience(user, body, origin);
     return resp(404, { error: 'not found' }, origin);
   } catch (err) {
