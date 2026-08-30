@@ -204,3 +204,6 @@ footer a { color: var(--ocean); }
   .circle-row { flex-direction: column; }
   .circle-video { flex: none; width: 100%; max-width: 300px; margin: 0 auto; }
 }
+
+/* ── Scroll-world hero ─────────────────────────────────────────────────── */
+.world-hero { --sw-bg: #fdf6ec; --sw-ink: #073b57; --sw-accent: #ff6b57; }
