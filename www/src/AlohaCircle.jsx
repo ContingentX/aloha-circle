@@ -1,9 +1,11 @@
 // "Join the Aloha Circle" — the OGG baggage-claim experience: travelers are
 // greeted by kiʻi of the Hawaiian akua, and a small donation opens the
 // experience (pick a Hawaiian term, join its virtual representation).
-// Video: experience-area walkthrough with the kiʻi avatar explainer overlay.
+// Video: experience-area walkthrough with the kiʻi avatar explainer overlay
+// (top-right). Portrait 9:16 — display the full frame, never crop, or the
+// avatar overlay gets cut off.
 const CIRCLE_VIDEO =
-  'https://buzz.masky.ai/media/032f69c54a1228aec6ff685f9036214d0205f9268074f57e28854f7b7c097d11.mp4';
+  'https://buzz.masky.ai/media/af6317556ffba70e968c6e7672ce2b454b809cf479f56c5f64ce90637e4b1c7f.mp4';
 
 export function AlohaCircle() {
   return (
@@ -20,8 +22,9 @@ export function AlohaCircle() {
             meaning with you across Maui.
           </p>
           <p className="hint">
-            Watch the walkthrough — the kiʻi guide explains how voluntourism through the
-            Aloha Circle works.
+            Watch the walkthrough — you will choose one of the four main akua to guide
+            you through an augmented reality experience. Guests that point their phones
+            at this space will see you and the spirits of Hawaiʻi moving as one.
           </p>
         </div>
         <video
