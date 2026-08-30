@@ -1,0 +1,161 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: AlohaLive API - Lambda function URL (auth-backed profiles/verification, experiences, Stripe donations) + DynamoDB + verify-uploads bucket
+
+Resources:
+  DataTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: alohalive
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: PK, AttributeType: S }
+        - { AttributeName: SK, AttributeType: S }
+      KeySchema:
+        - { AttributeName: PK, KeyType: HASH }
+        - { AttributeName: SK, KeyType: RANGE }
+      TimeToLiveSpecification: { AttributeName: ttl, Enabled: true }
+
+  VerifyBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub "alohalive-verify-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - https://alohalive.net
+              - https://www.alohalive.net
+              - https://dev.alohalive.net
+              - http://localhost:5173
+              - http://127.0.0.1:5173
+            AllowedMethods: [PUT]
+            AllowedHeaders: ["*"]
+            MaxAge: 3600
+
+  DonationsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: alohalive-donations-lambda
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: alohalive-api
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/alohalive/prod/*"
+              - Effect: Allow
+                Action: kms:Decrypt
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub "ssm.${AWS::Region}.amazonaws.com"
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Scan
+                Resource: !GetAtt DataTable.Arn
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub "${VerifyBucket.Arn}/verify/*"
+              - Effect: Allow
+                Action: ses:SendEmail
+                Resource: "*"
+                Condition:
+                  StringLike:
+                    ses:FromAddress: "*@alohalive.net"
+
+  DonationsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: alohalive-donations
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt DonationsRole.Arn
+      MemorySize: 256
+      Timeout: 15
+      Environment:
+        Variables:
+          TABLE: !Ref DataTable
+          VERIFY_BUCKET: !Ref VerifyBucket
+      Code:
+        # Bootstrap stub; real code is uploaded by infra/deploy.sh
+        # (aws lambda update-function-code with infra/donations/index.mjs).
+        ZipFile: |
+          exports.handler = async () => ({ statusCode: 503, body: '{"error":"bootstrapping"}' });
+
+  # Function URLs are blocked at the account level (org policy) — expose via
+  # API Gateway HTTP API instead. Payload format 2.0 matches the function-URL
+  # event shape, so the handler is transport-agnostic.
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: alohalive-api
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - https://alohalive.net
+          - https://www.alohalive.net
+          - https://dev.alohalive.net
+          - http://localhost:5173
+          - http://127.0.0.1:5173
+        AllowMethods: [GET, POST, OPTIONS]
+        AllowHeaders: [content-type, authorization]
+        MaxAge: 3600
+
+  HttpApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt DonationsFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  HttpApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: $default
+      Target: !Sub "integrations/${HttpApiIntegration}"
+
+  HttpApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: $default
+      AutoDeploy: true
+
+  HttpApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DonationsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*"
+
+Outputs:
+  ApiEndpoint:
+    Description: Public HTTP API endpoint for the AlohaLive API (VITE_API in www builds).
+    Value: !GetAtt HttpApi.ApiEndpoint

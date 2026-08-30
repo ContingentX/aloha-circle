@@ -1,0 +1,472 @@
+{
+  "nonprofits": [
+    {
+      "slug": "treecovery",
+      "name": "Treecovery Hawaiʻi",
+      "causeTags": [
+        "trees",
+        "aina",
+        "wildfire-recovery"
+      ],
+      "needs": [
+        "nursery volunteers",
+        "tree adoptions",
+        "donations"
+      ],
+      "website": "https://treecoveryhawaii.org/",
+      "source": "seed"
+    },
+    {
+      "slug": "hua-momona",
+      "name": "Hua Momona Farms",
+      "causeTags": [
+        "food-security",
+        "farming",
+        "wildfire-recovery"
+      ],
+      "needs": [
+        "meal-program donations",
+        "farm volunteers",
+        "dinner bookings"
+      ],
+      "website": "https://www.huamomonafarms.com/",
+      "source": "seed"
+    },
+    {
+      "slug": "maui-humane",
+      "name": "Maui Humane Society",
+      "causeTags": [
+        "animals",
+        "family"
+      ],
+      "needs": [
+        "Beach Buddies volunteers",
+        "foster homes",
+        "pet food"
+      ],
+      "website": "https://www.mauihumanesociety.org/",
+      "source": "seed"
+    },
+    {
+      "slug": "hawaii-wildlife-fund",
+      "name": "Hawaiʻi Wildlife Fund",
+      "causeTags": [
+        "wildlife",
+        "ocean",
+        "reef"
+      ],
+      "needs": [
+        "turtle patrol volunteers",
+        "cleanup crews"
+      ],
+      "website": "https://www.wildhawaii.org/",
+      "source": "seed"
+    },
+    {
+      "slug": "kipuka-olowalu",
+      "name": "Kīpuka Olowalu",
+      "causeTags": [
+        "aina",
+        "farming",
+        "culture"
+      ],
+      "needs": [
+        "taro patch volunteers",
+        "native planting crews"
+      ],
+      "website": "https://kipukaolowalu.org/",
+      "source": "seed"
+    },
+    {
+      "slug": "maui-cultural-lands",
+      "name": "Maui Cultural Lands",
+      "causeTags": [
+        "culture",
+        "trails",
+        "aina"
+      ],
+      "needs": [
+        "Saturday restoration volunteers"
+      ],
+      "website": "https://www.mauiculturallands.org/",
+      "source": "seed"
+    },
+    {
+      "slug": "surfrider-maui",
+      "name": "Surfrider Foundation Maui",
+      "causeTags": [
+        "ocean",
+        "reef",
+        "community"
+      ],
+      "needs": [
+        "beach cleanup volunteers",
+        "debris data loggers"
+      ],
+      "website": "https://maui.surfrider.org/",
+      "source": "seed"
+    },
+    {
+      "slug": "maui-food-bank",
+      "name": "Maui Food Bank",
+      "causeTags": [
+        "food-security",
+        "community"
+      ],
+      "needs": [
+        "produce sorters",
+        "drivers",
+        "food drives"
+      ],
+      "website": "https://mauifoodbank.org/",
+      "source": "seed"
+    },
+    {
+      "slug": "habitat-maui",
+      "name": "Habitat for Humanity Maui",
+      "causeTags": [
+        "community",
+        "rebuilding"
+      ],
+      "needs": [
+        "construction volunteers",
+        "ReStore helpers"
+      ],
+      "website": "https://www.habitat-maui.org/",
+      "source": "seed"
+    }
+  ],
+  "causes": [
+    {
+      "slug": "lahaina-replant",
+      "title": "Replant Lāhainā home lots before the dry season",
+      "summary": "Treecovery has nursery trees ready for fire-survivor families — planting crews are the bottleneck this month.",
+      "causeTags": [
+        "trees",
+        "aina",
+        "wildfire-recovery"
+      ],
+      "urgency": 5,
+      "action": "Join a Treecovery planting day in Lāhainā",
+      "nonprofit": "Treecovery Hawaiʻi",
+      "url": "https://treecoveryhawaii.org/"
+    },
+    {
+      "slug": "hot-meals",
+      "title": "Keep hot meals flowing to fire-displaced families",
+      "summary": "Hua Momona Farms is past 100,000 meals served and needs meal-program donations and farm volunteers to keep weekly service going.",
+      "causeTags": [
+        "food-security",
+        "farming",
+        "wildfire-recovery"
+      ],
+      "urgency": 4,
+      "action": "Volunteer a farm morning with Hua Momona",
+      "nonprofit": "Hua Momona Farms",
+      "url": "https://www.huamomonafarms.com/"
+    },
+    {
+      "slug": "beach-buddies",
+      "title": "Shelter dogs need weekday Beach Buddies",
+      "summary": "Maui Humane Society has more dogs than weekday walkers — visitors can take a shelter pup out for a beach morning.",
+      "causeTags": [
+        "animals",
+        "family",
+        "ocean"
+      ],
+      "urgency": 3,
+      "action": "Book a Beach Buddies morning",
+      "nonprofit": "Maui Humane Society",
+      "url": "https://www.mauihumanesociety.org/"
+    },
+    {
+      "slug": "hawksbill-patrol",
+      "title": "Hawksbill nesting season needs dawn patrollers",
+      "summary": "Hawaiʻi Wildlife Fund runs dawn nest patrols May–October and is short on volunteers for the east-side beaches.",
+      "causeTags": [
+        "wildlife",
+        "ocean",
+        "reef"
+      ],
+      "urgency": 4,
+      "action": "Join a dawn sea-turtle patrol",
+      "nonprofit": "Hawaiʻi Wildlife Fund",
+      "url": "https://www.wildhawaii.org/"
+    },
+    {
+      "slug": "olowalu-loi",
+      "title": "Pull invasives from the Olowalu loʻi kalo",
+      "summary": "Kīpuka Olowalu restoration days need hands in the taro patches — no experience needed, feet in the mud.",
+      "causeTags": [
+        "aina",
+        "farming",
+        "culture"
+      ],
+      "urgency": 3,
+      "action": "Work a taro patch morning at Kīpuka Olowalu",
+      "nonprofit": "Kīpuka Olowalu",
+      "url": "https://kipukaolowalu.org/"
+    },
+    {
+      "slug": "honokowai-saturday",
+      "title": "Saturday restoration crew in Honokōwai Valley",
+      "summary": "Maui Cultural Lands hikes volunteers into Honokōwai every Saturday to restore taro terraces and cultural sites.",
+      "causeTags": [
+        "culture",
+        "trails",
+        "aina"
+      ],
+      "urgency": 3,
+      "action": "Join the Saturday Honokōwai hike-in",
+      "nonprofit": "Maui Cultural Lands",
+      "url": "https://www.mauiculturallands.org/"
+    },
+    {
+      "slug": "kahului-cleanup",
+      "title": "Post-swell debris cleanup at Kahului Harbor",
+      "summary": "Surfrider Maui logs every piece of marine debris as conservation data — the next cleanup needs counters and baggers.",
+      "causeTags": [
+        "ocean",
+        "reef",
+        "community"
+      ],
+      "urgency": 3,
+      "action": "Join the sunrise beach cleanup",
+      "nonprofit": "Surfrider Foundation Maui",
+      "url": "https://maui.surfrider.org/"
+    },
+    {
+      "slug": "food-boxes",
+      "title": "Weekend family food-box packing shifts",
+      "summary": "Maui Food Bank distributes to thousands of residents monthly and weekend packing shifts are going unfilled.",
+      "causeTags": [
+        "food-security",
+        "community",
+        "family"
+      ],
+      "urgency": 4,
+      "action": "Pack food boxes with Maui Food Bank",
+      "nonprofit": "Maui Food Bank",
+      "url": "https://mauifoodbank.org/"
+    },
+    {
+      "slug": "lahaina-framing",
+      "title": "Framing days on the Lāhainā rebuild",
+      "summary": "Habitat for Humanity Maui has active build sites in Lāhainā and needs construction volunteers — tools provided.",
+      "causeTags": [
+        "community",
+        "rebuilding",
+        "wildfire-recovery"
+      ],
+      "urgency": 5,
+      "action": "Swing a hammer on a Lāhainā rebuild day",
+      "nonprofit": "Habitat for Humanity Maui",
+      "url": "https://www.habitat-maui.org/"
+    }
+  ],
+  "locals": [
+    {
+      "slug": "seed-keoni",
+      "name": "Keoni",
+      "town": "Lahaina",
+      "interests": [
+        "diving",
+        "ocean",
+        "fishing"
+      ],
+      "causes": [
+        "reef",
+        "ocean"
+      ],
+      "verified": true
+    },
+    {
+      "slug": "seed-leilani",
+      "name": "Leilani",
+      "town": "Paia",
+      "interests": [
+        "photography",
+        "hiking",
+        "ocean"
+      ],
+      "causes": [
+        "wildlife",
+        "trails"
+      ],
+      "verified": true
+    },
+    {
+      "slug": "seed-makoa",
+      "name": "Makoa",
+      "town": "Kahului",
+      "interests": [
+        "farming",
+        "cooking",
+        "community"
+      ],
+      "causes": [
+        "food-security",
+        "aina"
+      ],
+      "verified": true
+    }
+  ],
+  "endorsements": [
+    {
+      "slug": "seed-1",
+      "local": "Keoni",
+      "nonprofit": "Surfrider Foundation Maui",
+      "verdict": "helping_now"
+    },
+    {
+      "slug": "seed-2",
+      "local": "Keoni",
+      "nonprofit": "Hawaiʻi Wildlife Fund",
+      "verdict": "helping_now"
+    },
+    {
+      "slug": "seed-3",
+      "local": "Leilani",
+      "nonprofit": "Treecovery Hawaiʻi",
+      "verdict": "helping_now"
+    },
+    {
+      "slug": "seed-4",
+      "local": "Makoa",
+      "nonprofit": "Hua Momona Farms",
+      "verdict": "helping_now"
+    },
+    {
+      "slug": "seed-5",
+      "local": "Leilani",
+      "nonprofit": "Maui Cultural Lands",
+      "verdict": "helping_now"
+    },
+    {
+      "slug": "seed-6",
+      "local": "Makoa",
+      "nonprofit": "Maui Food Bank",
+      "verdict": "helping_now"
+    },
+    {
+      "slug": "seed-7",
+      "local": "Makoa",
+      "nonprofit": "Kīpuka Olowalu",
+      "verdict": "generally_helping"
+    },
+    {
+      "slug": "seed-8",
+      "local": "Keoni",
+      "nonprofit": "Maui Humane Society",
+      "verdict": "generally_helping"
+    },
+    {
+      "slug": "seed-9",
+      "local": "Leilani",
+      "nonprofit": "Habitat for Humanity Maui",
+      "verdict": "generally_helping"
+    }
+  ],
+  "experiences": [
+    {
+      "slug": "hua-momona-chef-dinner",
+      "npoSlug": "hua-momona",
+      "title": "Plated dinner for two + meet & greet with celebrity chef Zack Laidlaw",
+      "description": "Farm-to-table plated dinner for two at Hua Momona Farms in Kula, with a personal meet & greet with chef Zack Laidlaw.",
+      "value": 500,
+      "minDonation": 50,
+      "perDay": 1,
+      "perMonth": 2
+    },
+    {
+      "slug": "treecovery-planting-day",
+      "npoSlug": "treecovery",
+      "title": "Tree-planting day in Lāhainā with founder Duane Sparkman",
+      "description": "Spend a morning replanting fire-scarred Lāhainā alongside Treecovery founder Duane Sparkman.",
+      "value": 250,
+      "minDonation": 25,
+      "perDay": 1,
+      "perMonth": 10
+    },
+    {
+      "slug": "habitat-rebuild-day",
+      "npoSlug": "habitat-maui",
+      "title": "Lāhainā rebuild construction day (tools provided)",
+      "description": "Swing a hammer on a real Habitat for Humanity Maui rebuild site — tools and training provided.",
+      "value": 180,
+      "minDonation": 20,
+      "perDay": 1,
+      "perMonth": 10
+    },
+    {
+      "slug": "hwf-turtle-patrol",
+      "npoSlug": "hawaii-wildlife-fund",
+      "title": "Dawn sea-turtle patrol for two with a field biologist",
+      "description": "Walk a nesting beach at dawn with a Hawaiʻi Wildlife Fund field biologist, checking on honu nests.",
+      "value": 150,
+      "minDonation": 20,
+      "perDay": 1,
+      "perMonth": 10
+    },
+    {
+      "slug": "mcl-honokowai-hike",
+      "npoSlug": "maui-cultural-lands",
+      "title": "Honokōwai Valley hike + cultural site restoration",
+      "description": "Guided hike into Honokōwai Valley with Maui Cultural Lands, helping restore ancient Hawaiian sites.",
+      "value": 130,
+      "minDonation": 15,
+      "perDay": 1,
+      "perMonth": 10
+    },
+    {
+      "slug": "kipuka-loi-restoration",
+      "npoSlug": "kipuka-olowalu",
+      "title": "Loʻi kalo (taro patch) restoration morning + valley tour",
+      "description": "Work the loʻi kalo with Kīpuka Olowalu stewards, then tour the Olowalu valley.",
+      "value": 120,
+      "minDonation": 15,
+      "perDay": 1,
+      "perMonth": 10
+    },
+    {
+      "slug": "treecovery-adopt-tree",
+      "npoSlug": "treecovery",
+      "title": "Adopt a nursery tree for a fire-survivor family",
+      "description": "Your name on a nursery tree that Treecovery delivers to a Lāhainā fire-survivor family's rebuilt home.",
+      "value": 75,
+      "minDonation": 10,
+      "perDay": 1,
+      "perMonth": 10
+    },
+    {
+      "slug": "food-bank-packing",
+      "npoSlug": "maui-food-bank",
+      "title": "Family food-box packing shift with local volunteers",
+      "description": "Join a Maui Food Bank packing line and send a pallet of food boxes out with your name on it.",
+      "value": 60,
+      "minDonation": 10,
+      "perDay": 1,
+      "perMonth": 10
+    },
+    {
+      "slug": "humane-beach-buddies",
+      "npoSlug": "maui-humane",
+      "title": "Beach Buddies morning with a shelter dog",
+      "description": "Check a shelter dog out of Maui Humane Society for a beach morning it will never forget.",
+      "value": 50,
+      "minDonation": 10,
+      "perDay": 1,
+      "perMonth": 10
+    },
+    {
+      "slug": "surfrider-sunrise-cleanup",
+      "npoSlug": "surfrider-maui",
+      "title": "Sunrise beach cleanup + reef-safe sunscreen talk-story",
+      "description": "Sunrise cleanup with Surfrider Maui volunteers, plus a reef-safe sunscreen talk-story session.",
+      "value": 40,
+      "minDonation": 5,
+      "perDay": 1,
+      "perMonth": 10
+    }
+  ]
+}

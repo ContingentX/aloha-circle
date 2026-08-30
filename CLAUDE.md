@@ -14,6 +14,14 @@ Monorepo: `/www` (Vite React site), `/app` (Expo RN app), `/agentharness` (Node 
 - Keep the matcher deterministic and testable; LLM/agent logic goes behind the TrueForge harness boundary in `/agentharness`, not in the clients.
 - Update the "Qodo Code Review Evidence" table in README.md when a PR merges.
 
+## Auth, verification & donations (AWS)
+
+All app data is in AWS: DynamoDB table `alohalive`, S3 verify-uploads bucket,
+SES domain-proof codes, Stripe donations — served by the Lambda API in
+`infra/donations/` (stack `alohalive-donations`, deployed by `infra/deploy.sh`).
+Firebase is used only as the Google sign-in door (ID tokens verified in the
+Lambda). Full architecture + endpoint list: `infra/README-aws-auth.md`.
+
 ## Bright Data scraper settings (Maui Needs Index)
 
 Scraper configuration is version-controlled in `agentharness/src/sources.json` — one entry per source:
@@ -23,3 +31,12 @@ Scraper configuration is version-controlled in `agentharness/src/sources.json` �
 - When adding/repairing a scraper, edit `sources.json` (never hardcode selectors in code) so settings stay reusable and version-controlled.
 - Bright Data credentials go in `agentharness/.env` as `BRIGHTDATA_API_TOKEN` (never committed).
 - CauseSignal shape: `{ source, url, title, causeTags[], urgency (1-5), summary, fetchedAt }`.
+
+## Site media (/media)
+
+Large site media (cause videos, card images) is NOT in git or the web build:
+it lives in the site S3 buckets under `media/` (uploaded directly with
+`aws s3 cp/sync`, both dev and prod buckets) and is referenced site-relative
+as `/media/<name>`. `infra/deploy-web.sh` excludes `media/*` from its
+`--delete` sync so deploys never remove it. Don't ship third-party media URLs
+(e.g. buzz.masky.ai) in site code.

@@ -28,6 +28,23 @@ aws cloudformation deploy \
     CreateWww="$CREATE_WWW" \
     HostedZoneId="$HOSTED_ZONE_ID"
 
+echo "==> [$ENV] Deploying donations API stack (alohalive-donations)"
+aws cloudformation deploy \
+  --template-file "$ROOT/infra/donations.yaml" \
+  --stack-name "alohalive-donations" \
+  --region "$REGION" \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --no-fail-on-empty-changeset
+
+echo "==> [$ENV] Uploading donations Lambda code"
+DONATIONS_ZIP="$(mktemp -t donations-XXXXXX).zip"
+(cd "$ROOT/infra/donations" && zip -q -j "$DONATIONS_ZIP" index.mjs)
+aws lambda update-function-code \
+  --function-name alohalive-donations \
+  --zip-file "fileb://$DONATIONS_ZIP" \
+  --region "$REGION" >/dev/null
+rm -f "$DONATIONS_ZIP"
+
 echo "==> [$ENV] Outputs"
 aws cloudformation describe-stacks --stack-name "${PROJECT}-site-${ENV}" --region "$REGION" \
   --query "Stacks[0].Outputs" --output table
