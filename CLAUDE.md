@@ -31,3 +31,12 @@ Scraper configuration is version-controlled in `agentharness/src/sources.json` â
 - When adding/repairing a scraper, edit `sources.json` (never hardcode selectors in code) so settings stay reusable and version-controlled.
 - Bright Data credentials go in `agentharness/.env` as `BRIGHTDATA_API_TOKEN` (never committed).
 - CauseSignal shape: `{ source, url, title, causeTags[], urgency (1-5), summary, fetchedAt }`.
+
+## Site media (/media)
+
+Large site media (cause videos, card images) is NOT in git or the web build:
+it lives in the site S3 buckets under `media/` (uploaded directly with
+`aws s3 cp/sync`, both dev and prod buckets) and is referenced site-relative
+as `/media/<name>`. `infra/deploy-web.sh` excludes `media/*` from its
+`--delete` sync so deploys never remove it. Don't ship third-party media URLs
+(e.g. buzz.masky.ai) in site code.

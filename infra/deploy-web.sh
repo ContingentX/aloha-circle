@@ -33,7 +33,11 @@ echo "==> [$ENV] Syncing to s3://$BUCKET"
 # and keep serving stale bundles after a deploy.
 aws s3 sync "$ROOT/www/dist/assets/" "s3://$BUCKET/assets/" --delete \
   --cache-control "public,max-age=31536000,immutable"
-aws s3 sync "$ROOT/www/dist/" "s3://$BUCKET/" --delete --exclude "assets/*" \
+# media/ holds large videos/images uploaded straight to the bucket (not in
+# git, not in the build) — the site references them as /media/<name>; never
+# let the sync delete them.
+aws s3 sync "$ROOT/www/dist/" "s3://$BUCKET/" --delete \
+  --exclude "assets/*" --exclude "media/*" \
   --cache-control "no-cache"
 
 echo "==> [$ENV] Invalidating CloudFront $DIST_ID"
