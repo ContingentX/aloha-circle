@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
-import { AuthProvider } from './auth.jsx';
+import { AuthProvider, useAuth } from './auth.jsx';
 import { AuthButton, LocalVerifyCard, NpoVerifyCard } from './Verify.jsx';
 import { DonationWheel, ExperienceManager } from './Wheel.jsx';
 import { LiveStrip, CauseScroller } from './Causes.jsx';
@@ -177,6 +177,7 @@ function LocalTab() {
 }
 
 function NonprofitTab() {
+  const { user, ready } = useAuth();
   const [form, setForm] = useState({ name: '', website: '', causeTags: '' });
   const [done, setDone] = useState(false);
   const [error, setError] = useState(null);
@@ -195,6 +196,9 @@ function NonprofitTab() {
       setError(err.message);
     }
   };
+
+  if (!ready) return null;
+  if (!user) return <NpoVerifyCard />;
 
   if (done) {
     return (

@@ -27,8 +27,8 @@ variables point builds here): `GET /api/health`, `GET /api/nonprofits`
 (seeded/agent-written `NPO#` items merged with verified signed-up nonprofits),
 `GET /api/causes`, `POST /api/visitors {name, interests[]}` (runs the
 deterministic matcher, returns `{visitor, match}`), `POST /api/locals`,
-`POST /api/nonprofits`, and `POST /api/endorsements {local, nonprofit,
-verdict}`. Anonymous community writes are pending/unverified and never affect
+and `POST /api/endorsements {local, nonprofit, verdict}`. Anonymous community
+writes are pending/unverified and never affect
 trusted counts or matching. Item shapes are documented at the top of the
 "public data plane" section in `donations/index.mjs`; every public item must
 carry `entityType`, `entityId`, `schemaVersion`, and `version` so the public
@@ -42,7 +42,9 @@ the site by conditionally writing those same versioned DynamoDB items.
 Authed (`Authorization: Bearer <Firebase ID token>`): `GET /me`,
 `POST /profile`, `POST /npo/claim`, `POST /npo/send-code`,
 `POST /npo/verify-code`, `POST /local/submit`, `POST /experiences`
-(verified nonprofits only).
+(verified nonprofits only), and `POST /api/nonprofits`. Nonprofit listing
+submissions are pending for at most 30 days and are atomically limited to one
+per authenticated account per UTC day before the pending record is written.
 
 ### Aloha Agent record contract
 

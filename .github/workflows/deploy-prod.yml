@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # Dev and production currently share one Lambda, table, API, and stack.
-  group: alohalive-shared-backend-deploy
+  # Keep the stable cross-workflow group while both sites share a backend.
+  group: deploy-prod
   cancel-in-progress: false
 
 permissions:

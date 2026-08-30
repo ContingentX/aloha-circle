@@ -7,10 +7,10 @@
 //
 // Public:  GET /experiences · POST /donate · GET /spin?session_id=cs_...
 //          GET /api/health · GET /api/nonprofits · GET /api/causes
-//          POST /api/visitors · POST /api/locals · POST /api/nonprofits
-//          POST /api/endorsements
+//          POST /api/visitors · POST /api/locals · POST /api/endorsements
 // Authed:  GET /me · POST /profile · POST /npo/claim · POST /npo/send-code
 //          POST /npo/verify-code · POST /local/submit
+//          POST /api/nonprofits (one pending submission per account/day)
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
@@ -274,6 +274,7 @@ const publicStore = createDynamoPublicStore({
   table: TABLE,
   PutCommand,
   ScanCommand,
+  UpdateCommand,
   randomId: randomUUID,
 });
 const publicApi = createPublicApi({ store: publicStore });
@@ -427,11 +428,23 @@ export const handler = async (event) => {
     if (method === 'GET' && path === '/spin') {
       return await spin(new URLSearchParams(event.rawQueryString ?? '').get('session_id'), origin);
     }
-    const publicResult = await publicApi.handle({ method, path, rawBody: event.body });
-    if (publicResult) return resp(publicResult.statusCode, publicResult.body, origin);
+    const authenticatedPublicSubmission = method === 'POST' && path === '/api/nonprofits';
+    if (!authenticatedPublicSubmission) {
+      const publicResult = await publicApi.handle({ method, path, rawBody: event.body });
+      if (publicResult) return resp(publicResult.statusCode, publicResult.body, origin);
+    }
 
     const user = await verifyToken(event.headers);
     if (!user) return resp(401, { error: 'sign in required' }, origin);
+    if (authenticatedPublicSubmission) {
+      const publicResult = await publicApi.handle({
+        method,
+        path,
+        rawBody: event.body,
+        clientKey: sha256(`firebase:${user.uid}`),
+      });
+      if (publicResult) return resp(publicResult.statusCode, publicResult.body, origin);
+    }
     const requestBody = method === 'POST' ? body() : {};
     if (method === 'GET' && path === '/me') return await me(user, origin);
     if (method === 'POST' && path === '/profile') return await saveProfile(user, requestBody, origin);

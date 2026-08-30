@@ -15,6 +15,12 @@ class PutCommand {
   }
 }
 
+class UpdateCommand {
+  constructor(input) {
+    this.input = input;
+  }
+}
+
 const trustedCause = {
   PK: 'CAUSE#reef', SK: 'META', entityId: 'reef',
   title: 'Restore the reef', summary: 'A source-backed need.',
@@ -65,7 +71,7 @@ test('Dynamo store paginates one cached trusted scan and projects anonymous read
   };
   const fixed = new Date('2026-08-29T12:00:00.000Z');
   const store = createDynamoPublicStore({
-    client, table: 'alohalive', PutCommand, ScanCommand,
+    client, table: 'alohalive', PutCommand, ScanCommand, UpdateCommand,
     randomId: () => 'generated-id', now: () => fixed,
   });
 
@@ -115,7 +121,7 @@ test('Dynamo store invalidates only the caches affected by pending and verified 
   };
   const fixed = new Date('2026-08-29T12:00:00.000Z');
   const store = createDynamoPublicStore({
-    client, table: 'alohalive', PutCommand, ScanCommand,
+    client, table: 'alohalive', PutCommand, ScanCommand, UpdateCommand,
     randomId: () => 'generated-id', now: () => fixed,
   });
   await store.list('NPO');
@@ -154,6 +160,40 @@ test('Dynamo store invalidates only the caches affected by pending and verified 
   });
 });
 
+test('Dynamo store atomically limits same-day submissions without storing the Firebase UID', async () => {
+  const calls = [];
+  let attempts = 0;
+  const client = {
+    async send(command) {
+      calls.push(command);
+      if (!(command instanceof UpdateCommand)) return { Items: [] };
+      attempts += 1;
+      if (attempts === 1) return {};
+      const error = new Error('quota exhausted');
+      error.name = 'ConditionalCheckFailedException';
+      throw error;
+    },
+  };
+  const fixed = new Date('2026-08-29T12:00:00.000Z');
+  const store = createDynamoPublicStore({
+    client, table: 'alohalive', PutCommand, ScanCommand, UpdateCommand,
+    randomId: () => 'generated-id', now: () => fixed,
+  });
+  const clientKey = 'c'.repeat(64);
+
+  assert.equal(await store.takeSubmissionSlot('nonprofit', clientKey, { limit: 1, ttlDays: 2 }), true);
+  assert.equal(await store.takeSubmissionSlot('nonprofit', clientKey, { limit: 1, ttlDays: 2 }), false);
+  const input = calls.find((call) => call instanceof UpdateCommand).input;
+  assert.deepEqual(input.Key, {
+    PK: `LIMIT#nonprofit#${clientKey}`,
+    SK: 'DAY#2026-08-29',
+  });
+  assert.equal(input.ConditionExpression, 'attribute_not_exists(#count) OR #count < :limit');
+  assert.equal(input.ExpressionAttributeValues[':limit'], 1);
+  assert.equal(input.ExpressionAttributeValues[':ttl'], Math.floor(fixed.getTime() / 1000) + 2 * 24 * 60 * 60);
+  assert.equal(JSON.stringify(input).includes('firebase-uid'), false);
+});
+
 test('Dynamo store refreshes trusted and profile caches exactly at TTL expiry', async () => {
   let clockMs = Date.parse('2026-08-29T12:00:00.000Z');
   const calls = [];
@@ -166,7 +206,7 @@ test('Dynamo store refreshes trusted and profile caches exactly at TTL expiry', 
     },
   };
   const store = createDynamoPublicStore({
-    client, table: 'alohalive', PutCommand, ScanCommand,
+    client, table: 'alohalive', PutCommand, ScanCommand, UpdateCommand,
     randomId: () => 'generated-id', now: () => new Date(clockMs), cacheTtlMs: 3_000,
   });
   await store.list('NPO');
@@ -181,11 +221,13 @@ test('Dynamo store refreshes trusted and profile caches exactly at TTL expiry', 
   assert.equal(calls.length, 4);
 });
 
-function memoryStore(initial = {}) {
+function memoryStore(initial = {}, { submissionLimit = Infinity } = {}) {
   const records = new Map(Object.entries(initial).map(([key, value]) => [key, [...value]]));
   const writes = [];
+  const quotaChecks = [];
   let sequence = 0;
   return {
+    quotaChecks,
     writes,
     async counts() {
       return {
@@ -202,6 +244,10 @@ function memoryStore(initial = {}) {
     },
     async verifiedNonprofitProfiles() {
       return records.get('USER') ?? [];
+    },
+    async takeSubmissionSlot(scope, clientKey, options) {
+      quotaChecks.push({ scope, clientKey, options });
+      return quotaChecks.length <= submissionLimit;
     },
     async put(prefix, fields, options = {}) {
       sequence += 1;
@@ -224,6 +270,7 @@ test('public routes create pending records with TTL and reject coerced object fi
   assert.equal((await api.handle({
     method: 'POST', path: '/api/nonprofits',
     rawBody: JSON.stringify({ name: '  Reef Helpers ', causeTags: ['Ocean', ' ocean ', {}, 'Reef'], website: 'javascript:alert(1)' }),
+    clientKey: 'a'.repeat(64),
   })).statusCode, 202);
   assert.equal((await api.handle({
     method: 'POST', path: '/api/locals',
@@ -234,7 +281,10 @@ test('public routes create pending records with TTL and reject coerced object fi
     rawBody: JSON.stringify({ local: 'Kai', localId: 'kai', nonprofit: 'Reef Helpers', nonprofitId: 'reef-helpers', verdict: 'helping_now', note: {} }),
   })).statusCode, 202);
 
-  for (const write of store.writes) {
+  assert.equal(store.writes[0].options.ttlDays, 30);
+  assert.equal(store.writes[0].fields.status, 'pending');
+  assert.equal(store.writes[0].fields.verified, false);
+  for (const write of store.writes.slice(1)) {
     assert.equal(write.fields.status, 'pending');
     assert.equal(write.fields.verified, false);
     assert.equal(write.options.ttlDays, 180);
@@ -261,6 +311,27 @@ test('public routes create pending records with TTL and reject coerced object fi
     rawBody: JSON.stringify({ local: 'Kai', localId: 'a'.repeat(121), nonprofit: 'Reef Helpers', verdict: 'helping_now' }),
   })).statusCode, 400);
   assert.equal(store.writes.length, 3, 'invalid requests must not write records');
+});
+
+test('nonprofit submissions require authentication and consume an atomic per-account slot before writing', async () => {
+  const store = memoryStore({}, { submissionLimit: 1 });
+  const api = createPublicApi({ store });
+  const request = {
+    method: 'POST',
+    path: '/api/nonprofits',
+    rawBody: JSON.stringify({ name: 'Reef Helpers', causeTags: ['ocean'] }),
+  };
+
+  assert.equal((await api.handle(request)).statusCode, 401);
+  assert.equal(store.quotaChecks.length, 0);
+  assert.equal((await api.handle({ ...request, clientKey: 'b'.repeat(64) })).statusCode, 202);
+  assert.equal((await api.handle({ ...request, clientKey: 'b'.repeat(64) })).statusCode, 429);
+  assert.equal(store.writes.length, 1, 'a rejected repeat must not persist another record');
+  assert.deepEqual(store.quotaChecks[0], {
+    scope: 'nonprofit',
+    clientKey: 'b'.repeat(64),
+    options: { limit: 1, ttlDays: 2 },
+  });
 });
 
 test('cause route returns the complete source-backed CauseSignal', async () => {

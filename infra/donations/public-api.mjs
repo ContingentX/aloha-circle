@@ -19,6 +19,7 @@ export function createDynamoPublicStore({
   table,
   PutCommand,
   ScanCommand,
+  UpdateCommand,
   randomId,
   now = () => new Date(),
   cacheTtlMs = 3_000,
@@ -135,6 +136,47 @@ export function createDynamoPublicStore({
     return countsInflight;
   }
 
+  async function takeSubmissionSlot(scope, clientKey, { limit = 1, ttlDays = 2 } = {}) {
+    const safeScope = typeof scope === 'string' && /^[a-z][a-z0-9-]{0,39}$/.test(scope)
+      ? scope
+      : null;
+    const safeClientKey = typeof clientKey === 'string' && /^[a-f0-9]{64}$/.test(clientKey)
+      ? clientKey
+      : null;
+    if (
+      !safeScope || !safeClientKey ||
+      !Number.isInteger(limit) || limit < 1 || limit > 100 ||
+      !Number.isInteger(ttlDays) || ttlDays < 1 || ttlDays > 30
+    ) return false;
+
+    const current = now();
+    const timestamp = current.toISOString();
+    const window = timestamp.slice(0, 10);
+    try {
+      await client.send(new UpdateCommand({
+        TableName: table,
+        Key: { PK: `LIMIT#${safeScope}#${safeClientKey}`, SK: `DAY#${window}` },
+        UpdateExpression:
+          'SET #ttl = if_not_exists(#ttl, :ttl), entityType = if_not_exists(entityType, :entityType), ' +
+          'createdAt = if_not_exists(createdAt, :timestamp), updatedAt = :timestamp ADD #count :one',
+        ConditionExpression: 'attribute_not_exists(#count) OR #count < :limit',
+        ExpressionAttributeNames: { '#count': 'count', '#ttl': 'ttl' },
+        ExpressionAttributeValues: {
+          ':one': 1,
+          ':limit': limit,
+          ':ttl': Math.floor(current.getTime() / 1000) + ttlDays * 24 * 60 * 60,
+          ':entityType': 'submission-limit',
+          ':timestamp': timestamp,
+        },
+        ReturnValues: 'NONE',
+      }));
+      return true;
+    } catch (error) {
+      if (error?.name === 'ConditionalCheckFailedException') return false;
+      throw error;
+    }
+  }
+
   async function put(prefix, fields, { ttlDays } = {}) {
     if (!ENTITY_TYPE[prefix]) throw new Error(`unsupported public record prefix: ${prefix}`);
     const id = randomId();
@@ -166,7 +208,7 @@ export function createDynamoPublicStore({
     return { ...fields, id, createdAt: timestamp, updatedAt: timestamp };
   }
 
-  return { counts, list, put, verifiedNonprofitProfiles };
+  return { counts, list, put, takeSubmissionSlot, verifiedNonprofitProfiles };
 }
 
 const str = (value, max) => typeof value === 'string' ? value.trim().slice(0, max) : '';
@@ -310,10 +352,16 @@ export function createPublicApi({ store }) {
     return result(201, local);
   }
 
-  async function createNonprofit(body) {
+  async function createNonprofit(body, clientKey) {
     const name = str(body.name, 120);
     const causeTags = tags(body.causeTags);
     if (!name || causeTags.length === 0) return result(400, { error: 'name and causeTags[] are required' });
+    if (typeof clientKey !== 'string' || !/^[a-f0-9]{64}$/.test(clientKey)) {
+      return result(401, { error: 'sign in required' });
+    }
+    const hasSlot = typeof store.takeSubmissionSlot === 'function' &&
+      await store.takeSubmissionSlot('nonprofit', clientKey, { limit: 1, ttlDays: 2 });
+    if (!hasSlot) return result(429, { error: 'one nonprofit submission is allowed per account each day' });
     const nonprofit = await store.put('NPO', {
       name,
       causeTags,
@@ -322,7 +370,7 @@ export function createPublicApi({ store }) {
       source: 'community-submission',
       status: 'pending',
       verified: false,
-    }, { ttlDays: 180 });
+    }, { ttlDays: 30 });
     return result(202, nonprofit);
   }
 
@@ -352,7 +400,7 @@ export function createPublicApi({ store }) {
     return result(202, endorsement);
   }
 
-  async function handle({ method, path, rawBody }) {
+  async function handle({ method, path, rawBody, clientKey }) {
     if (method === 'GET' && path === '/api/health') return health();
     if (method === 'GET' && path === '/api/nonprofits') return nonprofits();
     if (method === 'GET' && path === '/api/causes') return causes();
@@ -364,7 +412,7 @@ export function createPublicApi({ store }) {
       '/api/endorsements': createEndorsement,
     };
     const handler = handlers[path];
-    return handler ? handler(parseJsonObject(rawBody ?? '{}')) : null;
+    return handler ? handler(parseJsonObject(rawBody ?? '{}'), clientKey) : null;
   }
 
   return { handle };

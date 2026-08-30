@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # Dev and production currently share one Lambda, table, API, and stack.
-  group: alohalive-shared-backend-deploy
+  # Match the workflow already on production while both sites share a backend.
+  group: deploy-prod
   cancel-in-progress: false
 
 permissions:
@@ -17,8 +17,7 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Both sites currently share one production API/table, so backend changes
-    # must pass the same human approval gate as the production workflow.
+    # Both sites currently use the same environment-scoped API/table settings.
     environment: production
     env:
       AWS_REGION: us-east-1

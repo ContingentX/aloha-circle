@@ -1,9 +1,18 @@
+import { auth } from './firebase.js';
+
 // In dev, Vite proxies /api to the agentharness on :8787.
 // In prod (S3 static site), set VITE_API_BASE at build time.
 const BASE = import.meta.env.VITE_API_BASE ?? '';
 
-async function request(path, options) {
-  const res = await fetch(`${BASE}${path}`, options);
+async function request(path, options = {}) {
+  const token = await auth.currentUser?.getIdToken();
+  const res = await fetch(`${BASE}${path}`, {
+    ...options,
+    headers: {
+      ...options.headers,
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
+  });
   const body = await res.json().catch(() => null);
   if (!res.ok) throw new Error(body?.error ?? `${res.status} ${res.statusText}`);
   if (body === null) throw new Error('The AlohaLive API is not reachable right now.');
