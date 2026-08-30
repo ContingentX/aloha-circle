@@ -43,6 +43,8 @@ export const FEATURED_NONPROFITS = [
     website: 'https://www.mauihumanesociety.org/',
     experience: 'Beach Buddies: a morning at the beach with a shelter pup',
     emoji: '🐕',
+    // Coco avatar invite: take a shelter pup on a Beach Buddies outing (site bucket /media)
+    video: '/media/coco-beach-buddies.mp4',
     grad: ['#ff6b57', '#ffd166'],
   },
   {
