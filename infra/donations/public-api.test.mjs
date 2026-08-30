@@ -395,6 +395,7 @@ test('visitor matching ignores pending records and duplicate tags cannot inflate
   assert.equal(response.body.match.localId, 'keoni');
   assert.equal(response.body.match.causeId, 'reef');
   assert.equal(response.body.match.score, 10);
+  assert.equal(response.body.match.scoreReceipt.total, 10);
   assert.equal(store.writes.find((write) => write.prefix === 'VISITOR').options.ttlDays, 30);
   assert.equal(store.writes.find((write) => write.prefix === 'MATCH').options.ttlDays, 30);
 });

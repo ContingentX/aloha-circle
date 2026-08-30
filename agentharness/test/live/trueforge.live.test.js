@@ -77,6 +77,9 @@ test('live TrueForge trace includes MCP, sandbox, approval, effect, and reconnec
   store.seedIfEmpty(path.join(HARNESS_DIR, 'fixtures', 'seed.json'));
   ingestOnce();
 
+  const registered = await trueforge.registerAlohaAgent();
+  assert.equal(registered.agent.name, process.env.TRUEFORGE_AGENT_NAME ?? trueforge.DEFAULT_AGENT_NAME);
+
   const deniedVisitor = store.insert('visitors', { name: 'Denied Demo Visitor', interests: ['diving', 'ocean'] });
   const deniedSession = await trueforge.createAlohaSession({ visitorId: deniedVisitor.id });
   const deniedProposal = await trueforge.runMatchTurn({ sessionId: deniedSession.id });

@@ -8,6 +8,54 @@ function fail(message) {
   throw error;
 }
 
+function compactVisitor(visitor) {
+  return { id: visitor.id, name: visitor.name, interests: visitor.interests };
+}
+
+function buildSandboxVerification(oracle) {
+  const receipt = oracle.scoreReceipt;
+  const endorsementSum = receipt.endorsementSum ?? receipt.endorsementRawScore;
+  const expression = [
+    `${MATCH_SCORING_CONTRACT.sharedInterestWeight}*${receipt.sharedInterestCount}`,
+    `${MATCH_SCORING_CONTRACT.localCauseWeight}*${receipt.localCauseOverlapCount}`,
+    `${MATCH_SCORING_CONTRACT.visitorCauseWeight}*${receipt.visitorCauseOverlapCount}`,
+    `${MATCH_SCORING_CONTRACT.urgencyWeight}*${receipt.urgency}`,
+    `(${endorsementSum}<${MATCH_SCORING_CONTRACT.endorsementCap}?${endorsementSum}:${MATCH_SCORING_CONTRACT.endorsementCap})`,
+  ].join('+');
+  const command = [
+    `s=$((${expression}))`,
+    `[ $s -eq ${oracle.score} ]&&a=true||a=false`,
+    `printf 'ALOHALIVE_SCORE_RECEIPT={"sandboxScore":%d,"oracleScore":%d,"localId":"%s","causeId":"%s","agrees":%s}\\n' $s ${oracle.score} ${oracle.localId} ${oracle.causeId} $a`,
+  ].join(';');
+  return {
+    tool: 'exec',
+    arguments: {
+      intent: 'Verify the deterministic AlohaLive score exactly once.',
+      command,
+    },
+  };
+}
+
+function compactContext({ sessionId, visitor, oracle, authoritativeSource }) {
+  if (!oracle.scoreReceipt || oracle.scoreReceipt.total !== oracle.score) {
+    fail('match is missing its deterministic scoring receipt');
+  }
+  return {
+    visitor: compactVisitor(visitor),
+    scorer: MATCH_SCORING_CONTRACT,
+    oracle,
+    sandboxVerification: buildSandboxVerification(oracle),
+    introductionProposal: {
+      session_id: sessionId,
+      visitor_id: visitor.id,
+      local_id: oracle.localId,
+      cause_id: oracle.causeId,
+      explanation: oracle.why,
+    },
+    ...(authoritativeSource ? { authoritativeSource } : {}),
+  };
+}
+
 export function normalizeIntroductionArguments({
   sessionId,
   visitorId,
@@ -56,20 +104,28 @@ export function getMatchContext({ sessionId, visitorId }) {
   const visitor = findById('visitors', visitorId);
   if (!visitor) fail('unknown visitor');
 
+  if (session.contextSource === 'dynamo-public-api') {
+    const oracle = load('matches').find((item) => item.visitorId === visitorId);
+    if (!oracle || oracle.scoreReceipt?.total !== oracle.score) {
+      fail('Dynamo match is missing its deterministic scoring receipt');
+    }
+    const localBlock = oracle.blocks?.find((block) => block.type === 'local');
+    const causeBlock = oracle.blocks?.find((block) => block.type === 'cause');
+    return compactContext({
+      sessionId,
+      visitor,
+      oracle,
+      authoritativeSource: 'dynamo-public-api',
+    });
+  }
+
   const locals = load('locals');
   const causes = load('causes');
   const endorsements = load('endorsements');
   const oracle = rankMatch(visitor, { locals, causes, endorsements });
   if (!oracle) fail('no eligible match');
 
-  return {
-    visitor,
-    locals,
-    causes,
-    endorsements,
-    scorer: MATCH_SCORING_CONTRACT,
-    oracle,
-  };
+  return compactContext({ sessionId, visitor, oracle });
 }
 
 export function requestIntroduction({ sessionId, visitorId, localId, causeId, explanation }) {

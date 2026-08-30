@@ -162,13 +162,34 @@ export function rankMatch(visitor, { locals = [], causes = [], endorsements = []
   for (const local of trustedLocals) {
     const sharedInterests = overlap(visitorInterests, local.interests);
     for (const cause of validCauses) {
+      const localCauseFit = overlap(local.causes, cause.causeTags);
+      const visitorCauseFit = overlap(visitorInterests, cause.causeTags);
+      const trust = endorsementScore(cause, trustedEndorsements);
       const score =
         sharedInterests.length * 3 +
-        overlap(local.causes, cause.causeTags).length * 2 +
-        overlap(visitorInterests, cause.causeTags).length * 2 +
+        localCauseFit.length * 2 +
+        visitorCauseFit.length * 2 +
         cause.urgency +
-        Math.min(endorsementScore(cause, trustedEndorsements), 5);
-      const candidate = { local, cause, sharedInterests, score };
+        Math.min(trust, 5);
+      const candidate = {
+        local,
+        cause,
+        sharedInterests,
+        score,
+        scoreReceipt: {
+          sharedInterestCount: sharedInterests.length,
+          sharedInterestPoints: sharedInterests.length * 3,
+          localCauseOverlapCount: localCauseFit.length,
+          localCausePoints: localCauseFit.length * 2,
+          visitorCauseOverlapCount: visitorCauseFit.length,
+          visitorCausePoints: visitorCauseFit.length * 2,
+          urgency: cause.urgency,
+          urgencyPoints: cause.urgency,
+          endorsementRawScore: trust,
+          endorsementPoints: Math.min(trust, 5),
+          total: score,
+        },
+      };
       if (candidateComesFirst(candidate, best)) best = candidate;
     }
   }
@@ -195,6 +216,7 @@ export function rankMatch(visitor, { locals = [], causes = [], endorsements = []
     why,
     suggestedAction,
     score: best.score,
+    scoreReceipt: best.scoreReceipt,
     blocks: [
       {
         type: 'local', id: best.local.id, name: best.local.name,

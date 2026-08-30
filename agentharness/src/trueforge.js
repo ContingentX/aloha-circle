@@ -4,6 +4,8 @@ import { findById, insert, load, updateById } from './store.js';
 import { introductionArgumentsFromToolCall, introductionArgumentsHash } from './introductions.js';
 import { buildAdvisoryContext } from './mem0.js';
 
+export const DEFAULT_AGENT_NAME = 'alohalive-maui-match';
+
 function requiredConfig(value, name) {
   if (!value) throw new Error(`${name} is required`);
   return value;
@@ -27,7 +29,7 @@ export function buildAgentSpec({
   return {
     model: {
       name: requiredConfig(modelName, 'TRUEFORGE_MODEL'),
-      params: { max_tokens: 4096, temperature: 0.1, parallel_tool_calls: false },
+      params: { max_tokens: 1536, temperature: 0, parallel_tool_calls: false },
     },
     instructions: [
       'You are the AlohaLive match-to-introduction agent.',
@@ -38,12 +40,11 @@ export function buildAgentSpec({
             'Never persist Bright Data results or execute any real-world effect from them.',
           ]
         : []),
-      'Always call get_match_context before proposing a match.',
-      'Use the TrueForge sandbox to run a small deterministic program that applies the returned scoring contract.',
-      'Compare the sandbox result with the returned oracle and stop if they differ.',
-      'The final successful sandbox command must print one line prefixed ALOHALIVE_SCORE_RECEIPT= followed by JSON with sandboxScore, oracleScore, localId, causeId, and agrees.',
-      'Explain the selected local, cause, evidence source, score, and proposed effect.',
-      'Call request_introduction exactly once with the IDs supplied by the tool.',
+      'Call get_match_context exactly once before proposing a match.',
+      'Its response contains sandboxVerification with exact exec arguments. Call exec exactly once with those arguments verbatim.',
+      'Do not create files, write a different program, retry exec, or call get_tool_info. If exec fails or its ALOHALIVE_SCORE_RECEIPT has agrees=false, stop.',
+      'After a successful receipt, call request_introduction exactly once using introductionProposal verbatim.',
+      'The only successful sequence is get_match_context, exec, request_introduction. Never stop or emit a final answer between those calls.',
       'That call must remain behind TrueForge human approval. If denied, stop and do not retry or substitute another write.',
       'Never send a message, donation, deployment, or real-world introduction.',
     ].join(' '),
@@ -76,9 +77,47 @@ export function buildAgentSpec({
         compaction: { enabled: false },
         large_tool_response: { enabled: true },
       },
-      iteration_limit: 20,
+      iteration_limit: 6,
     },
   };
+}
+
+function unwrapData(response) {
+  return response?.data ?? response;
+}
+
+export async function registerAlohaAgent({
+  client = createTrueForgeClient(),
+  agentName = process.env.TRUEFORGE_AGENT_NAME ?? DEFAULT_AGENT_NAME,
+  agentSpec = buildAgentSpec(),
+} = {}) {
+  const name = requiredConfig(agentName?.trim(), 'TRUEFORGE_AGENT_NAME');
+  const listed = unwrapData(await client.agents.list());
+  if (!Array.isArray(listed)) throw new Error('TrueForge agent list response is missing data[]');
+
+  const existing = listed.find((agent) => agent.name === name);
+  const response = existing
+    ? await client.agents.update(existing.id, { manifest: agentSpec })
+    : await client.agents.create({ name, manifest: agentSpec });
+  const changedAgent = unwrapData(response);
+  const agent = changedAgent?.id
+    ? unwrapData(await client.agents.get(changedAgent.id))
+    : changedAgent;
+  if (!agent?.id || agent.name !== name) {
+    throw new Error('TrueForge agent response is missing the expected id and name');
+  }
+  const expectedServers = agentSpec.mcp_servers?.map((server) => server.name) ?? [];
+  const persistedManifest = agent.manifest ?? {};
+  const actualServers = (persistedManifest.mcp_servers ?? persistedManifest.mcpServers ?? [])
+    .map((server) => server.name);
+  if (
+    persistedManifest.model?.name !== agentSpec.model?.name ||
+    persistedManifest.instructions !== agentSpec.instructions ||
+    expectedServers.some((server) => !actualServers.includes(server))
+  ) {
+    throw new Error('TrueForge did not persist the requested AlohaLive agent manifest');
+  }
+  return { agent, action: existing ? 'updated' : 'created' };
 }
 
 function parseArguments(value) {
@@ -92,6 +131,8 @@ function parseArguments(value) {
 async function collectTurn(stream) {
   const events = new Map();
   const trace = [];
+  const demoTrace = [];
+  const toolsByCallId = new Map();
   const approvalEvents = [];
   let turnId = null;
   let lastSequenceNumber = 0;
@@ -106,7 +147,70 @@ async function collectTurn(stream) {
     } else {
       events.set(event.id, event);
     }
+    if (event.type === 'mcp.initialize') {
+      demoTrace.push({
+        sequenceNumber: id == null ? null : Number(id),
+        type: event.type,
+        servers: (event.mcpServers ?? []).map((server) => server.name),
+      });
+    }
+    if (event.type === 'model.message' && Array.isArray(event.toolCalls)) {
+      for (const call of event.toolCalls) {
+        const tool = {
+          name: call.toolInfo?.name ?? call.function?.name ?? 'unknown',
+          server: call.toolInfo?.serverName ?? null,
+        };
+        toolsByCallId.set(call.id, tool);
+        demoTrace.push({
+          sequenceNumber: id == null ? null : Number(id),
+          type: 'tool.call',
+          toolName: tool.name,
+          server: tool.server,
+          ...(tool.server === 'mock-vendors' ? { mode: 'MOCK_DEMO' } : {}),
+        });
+      }
+    }
+    if (event.type === 'tool.response') {
+      const tool = toolsByCallId.get(event.toolCallId) ?? { name: 'unknown', server: null };
+      const entry = {
+        sequenceNumber: id == null ? null : Number(id),
+        type: event.type,
+        toolName: tool.name,
+        server: tool.server,
+      };
+      try {
+        const content = JSON.parse(event.content);
+        if (content?.mode === 'MOCK_DEMO') entry.mode = 'MOCK_DEMO';
+        if (typeof content?.provider === 'string') entry.provider = content.provider;
+        if (typeof content?.sourceUrl === 'string') entry.sourceUrl = content.sourceUrl;
+        if (typeof content?.fetchedAt === 'string') entry.fetchedAt = content.fetchedAt;
+        if (tool.name === 'get_match_context' && content?.oracle) {
+          const cause = content.oracle.blocks?.find((block) => block.type === 'cause');
+          entry.cache = {
+            source: 'alohalive-local',
+            causeId: content.oracle.causeId,
+            cause: content.oracle.cause,
+            score: content.oracle.score,
+            sourceUrl: cause?.sourceUrl ?? null,
+            fetchedAt: cause?.fetchedAt ?? null,
+          };
+        }
+      } catch {
+        // Tool output remains in TrueForge; the operator cache stores metadata only.
+      }
+      demoTrace.push(entry);
+    }
+    if (event.type === 'sandbox.created') {
+      demoTrace.push({ sequenceNumber: id == null ? null : Number(id), type: event.type });
+    }
     if (event.type === 'tool.approval_required') approvalEvents.push(event);
+    if (event.type === 'tool.approval_required') {
+      demoTrace.push({
+        sequenceNumber: id == null ? null : Number(id),
+        type: event.type,
+        tools: (event.toolCalls ?? []).map((ref) => toolsByCallId.get(ref.id)?.name ?? 'unknown'),
+      });
+    }
     if (event.type === 'turn.done') terminalState = event.state;
     trace.push({ sequenceNumber: id == null ? null : Number(id), type: event.type, threadId: event.threadId ?? null });
     // A terminal event is authoritative even if the provider leaves the SSE
@@ -135,7 +239,7 @@ async function collectTurn(stream) {
     }
   }
 
-  return { turnId, lastSequenceNumber, terminalState, pendingApprovals, trace };
+  return { turnId, lastSequenceNumber, terminalState, pendingApprovals, trace, demoTrace };
 }
 
 function getAlohaSession(sessionId) {
@@ -144,21 +248,30 @@ function getAlohaSession(sessionId) {
   return session;
 }
 
-export async function createAlohaSession({ visitorId, client = createTrueForgeClient(), agentSpec } = {}) {
+export async function createAlohaSession({
+  visitorId,
+  client = createTrueForgeClient(),
+  agentName = process.env.TRUEFORGE_AGENT_NAME ?? DEFAULT_AGENT_NAME,
+  contextSource = 'local-demo-store',
+} = {}) {
   const visitor = findById('visitors', visitorId);
   if (!visitor) throw new Error('unknown visitor');
 
-  // The Fern promise unwraps the HTTP envelope, but the API response still
-  // contains the session under `data`.
+  const name = requiredConfig(agentName?.trim(), 'TRUEFORGE_AGENT_NAME');
+
+  // A named registry binding is deliberate: inline specs run successfully but
+  // never create an entry in TrueForge's Agents Library.
   const response = await client.sessions.create({
-    agent: { spec: agentSpec ?? buildAgentSpec() },
+    agent: { name },
   });
-  const trueforgeSession = response?.data;
+  const trueforgeSession = unwrapData(response);
   if (!trueforgeSession?.id) throw new Error('TrueForge create session response is missing data.id');
 
   return insert('sessions', {
     visitorId,
     trueforgeSessionId: trueforgeSession.id,
+    trueforgeAgentName: name,
+    contextSource,
     status: 'ready',
     pendingApprovals: [],
   });
@@ -191,8 +304,9 @@ export async function runMatchTurn({
   }
   const prompt = [
     `Match visitor ${session.visitorId} in TrueForge session ${session.trueforgeSessionId}.`,
-    'Fetch the domain context through MCP, recompute the score in the sandbox, compare with the oracle,',
-    'then propose and request exactly one demo introduction record.',
+    'Execute the mandatory sequence now: get_match_context once, then exec once using sandboxVerification.arguments verbatim,',
+    'then, only when the receipt agrees, request_introduction once using introductionProposal verbatim.',
+    'Do not return a textual answer before request_introduction reaches human approval.',
     ...(advisoryContext ? [advisoryContext] : []),
   ].join(' ');
   const stream = await client.sessions.createTurnStream(session.trueforgeSessionId, {
@@ -205,6 +319,7 @@ export async function runMatchTurn({
     lastSequenceNumber: result.lastSequenceNumber,
     pendingApprovals: result.pendingApprovals,
     lastTrace: result.trace,
+    lastDemoTrace: result.demoTrace,
   });
   return result;
 }
@@ -263,6 +378,7 @@ export async function respondToApproval({
       lastSequenceNumber: result.lastSequenceNumber,
       pendingApprovals: result.pendingApprovals,
       lastTrace: result.trace,
+      lastDemoTrace: result.demoTrace,
       approvalInFlight: null,
       approvedIntroduction: null,
       lastApproval: {

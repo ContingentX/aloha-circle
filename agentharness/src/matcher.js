@@ -63,7 +63,27 @@ export function rankMatch(visitor, { locals, causes, endorsements }) {
         (cause.urgency ?? 0) * MATCH_SCORING_CONTRACT.urgencyWeight +
         Math.min(trust, MATCH_SCORING_CONTRACT.endorsementCap);
       if (!best || score > best.score) {
-        best = { local, cause, sharedInterests, score };
+        best = {
+          local,
+          cause,
+          sharedInterests,
+          score,
+          scoreReceipt: {
+            contractVersion: MATCH_SCORING_CONTRACT.version,
+            sharedInterestCount: sharedInterests.length,
+            sharedInterestPoints: sharedInterests.length * MATCH_SCORING_CONTRACT.sharedInterestWeight,
+            localCauseOverlapCount: localCauseFit.length,
+            localCausePoints: localCauseFit.length * MATCH_SCORING_CONTRACT.localCauseWeight,
+            visitorCauseOverlapCount: visitorCauseFit.length,
+            visitorCausePoints: visitorCauseFit.length * MATCH_SCORING_CONTRACT.visitorCauseWeight,
+            urgency: cause.urgency,
+            urgencyPoints: cause.urgency * MATCH_SCORING_CONTRACT.urgencyWeight,
+            endorsementRawScore: trust,
+            endorsementSum: trust,
+            endorsementPoints: Math.min(trust, MATCH_SCORING_CONTRACT.endorsementCap),
+            total: score,
+          },
+        };
       }
     }
   }
@@ -88,6 +108,7 @@ export function rankMatch(visitor, { locals, causes, endorsements }) {
     why,
     suggestedAction: best.cause.action ?? `Ask ${best.local.name} how to help with "${best.cause.title}".`,
     score: best.score,
+    scoreReceipt: best.scoreReceipt,
     blocks: [
       {
         type: 'local',
