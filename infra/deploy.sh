@@ -5,9 +5,10 @@
 set -euo pipefail
 
 ENV="${1:-}"
+# ALT_DOMAIN serves the same distribution under a second apex (empty = none).
 case "$ENV" in
-  dev)  DOMAIN="dev.alohalive.net"; CREATE_WWW="false" ;;
-  prod) DOMAIN="alohalive.net";     CREATE_WWW="true" ;;
+  dev)  DOMAIN="dev.alohalive.net"; CREATE_WWW="false"; ALT_DOMAIN="";                ALT_ZONE_ID="" ;;
+  prod) DOMAIN="alohalive.net";     CREATE_WWW="true";  ALT_DOMAIN="aloha-circle.com"; ALT_ZONE_ID="Z04064321OCFAQ8E2HIKK" ;;
   *) echo "usage: $0 <dev|prod>" >&2; exit 1 ;;
 esac
 
@@ -26,7 +27,9 @@ aws cloudformation deploy \
     Environment="$ENV" \
     DomainName="$DOMAIN" \
     CreateWww="$CREATE_WWW" \
-    HostedZoneId="$HOSTED_ZONE_ID"
+    HostedZoneId="$HOSTED_ZONE_ID" \
+    AltDomainName="$ALT_DOMAIN" \
+    AltHostedZoneId="$ALT_ZONE_ID"
 
 echo "==> [$ENV] Deploying donations API stack (alohalive-donations)"
 aws cloudformation deploy \
