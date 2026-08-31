@@ -20,9 +20,34 @@ Parameters:
     AllowedValues: ["true", "false"]
     Default: "false"
     Description: Also serve www.<DomainName> and redirect it to the apex (prod).
+  AltDomainName:
+    Type: String
+    Default: ""
+    Description: Optional secondary apex served by the same distribution (e.g. aloha-circle.com). Empty disables it.
+  AltHostedZoneId:
+    Type: String
+    Default: ""
+    Description: Hosted zone id for AltDomainName. Required when AltDomainName is set.
+
+# The alt-domain parameters only work as a pair: the cert validation and the
+# Alt* Route53 records both need the zone id. Reject a half-specified pair at
+# changeset time with a descriptive error instead of failing mid-deploy.
+Rules:
+  AltDomainRequiresZone:
+    RuleCondition: !Not [!Equals [!Ref AltDomainName, ""]]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref AltHostedZoneId, ""]]
+        AssertDescription: AltHostedZoneId is required when AltDomainName is set.
+  AltZoneRequiresDomain:
+    RuleCondition: !Not [!Equals [!Ref AltHostedZoneId, ""]]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref AltDomainName, ""]]
+        AssertDescription: AltDomainName is required when AltHostedZoneId is set.
 
 Conditions:
   WithWww: !Equals [!Ref CreateWww, "true"]
+  WithAlt: !Not [!Equals [!Ref AltDomainName, ""]]
+  WithAltWww: !And [!Condition WithAlt, !Condition WithWww]
 
 Resources:
   SiteBucket:
@@ -45,17 +70,39 @@ Resources:
     Properties:
       DomainName: !Ref DomainName
       SubjectAlternativeNames:
-        !If [WithWww, [!Sub "www.${DomainName}"], !Ref "AWS::NoValue"]
+        !If
+          - WithAltWww
+          - [!Sub "www.${DomainName}", !Ref AltDomainName, !Sub "www.${AltDomainName}"]
+          - !If
+              - WithAlt
+              - [!Ref AltDomainName]
+              - !If [WithWww, [!Sub "www.${DomainName}"], !Ref "AWS::NoValue"]
       ValidationMethod: DNS
       DomainValidationOptions:
         !If
-          - WithWww
+          - WithAltWww
           - - DomainName: !Ref DomainName
               HostedZoneId: !Ref HostedZoneId
             - DomainName: !Sub "www.${DomainName}"
               HostedZoneId: !Ref HostedZoneId
-          - - DomainName: !Ref DomainName
-              HostedZoneId: !Ref HostedZoneId
+            - DomainName: !Ref AltDomainName
+              HostedZoneId: !Ref AltHostedZoneId
+            - DomainName: !Sub "www.${AltDomainName}"
+              HostedZoneId: !Ref AltHostedZoneId
+          - !If
+              - WithAlt
+              - - DomainName: !Ref DomainName
+                  HostedZoneId: !Ref HostedZoneId
+                - DomainName: !Ref AltDomainName
+                  HostedZoneId: !Ref AltHostedZoneId
+              - !If
+                  - WithWww
+                  - - DomainName: !Ref DomainName
+                      HostedZoneId: !Ref HostedZoneId
+                    - DomainName: !Sub "www.${DomainName}"
+                      HostedZoneId: !Ref HostedZoneId
+                  - - DomainName: !Ref DomainName
+                      HostedZoneId: !Ref HostedZoneId
 
   OriginAccessControl:
     Type: AWS::CloudFront::OriginAccessControl
@@ -66,7 +113,8 @@ Resources:
         SigningBehavior: always
         SigningProtocol: sigv4
 
-  # Redirects www.alohalive.net to the canonical apex alohalive.net (301). Prod only.
+  # Redirects www.<host> to its own apex (301), for every domain on the
+  # distribution (alohalive.net and AltDomainName alike). Prod only.
   WwwToApexFunction:
     Type: AWS::CloudFront::Function
     Condition: WithWww
@@ -105,9 +153,15 @@ Resources:
         IPV6Enabled: true
         Aliases:
           !If
-            - WithWww
-            - [!Ref DomainName, !Sub "www.${DomainName}"]
-            - [!Ref DomainName]
+            - WithAltWww
+            - [!Ref DomainName, !Sub "www.${DomainName}", !Ref AltDomainName, !Sub "www.${AltDomainName}"]
+            - !If
+                - WithAlt
+                - [!Ref DomainName, !Ref AltDomainName]
+                - !If
+                    - WithWww
+                    - [!Ref DomainName, !Sub "www.${DomainName}"]
+                    - [!Ref DomainName]
         DefaultRootObject: index.html
         PriceClass: PriceClass_100
         ViewerCertificate:
@@ -196,6 +250,54 @@ Resources:
     Properties:
       HostedZoneId: !Ref HostedZoneId
       Name: !Sub "www.${DomainName}"
+      Type: AAAA
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+        EvaluateTargetHealth: false
+
+  AltApexRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: WithAlt
+    Properties:
+      HostedZoneId: !Ref AltHostedZoneId
+      Name: !Ref AltDomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+        EvaluateTargetHealth: false
+
+  AltApexRecordV6:
+    Type: AWS::Route53::RecordSet
+    Condition: WithAlt
+    Properties:
+      HostedZoneId: !Ref AltHostedZoneId
+      Name: !Ref AltDomainName
+      Type: AAAA
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+        EvaluateTargetHealth: false
+
+  AltWwwRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: WithAltWww
+    Properties:
+      HostedZoneId: !Ref AltHostedZoneId
+      Name: !Sub "www.${AltDomainName}"
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+        EvaluateTargetHealth: false
+
+  AltWwwRecordV6:
+    Type: AWS::Route53::RecordSet
+    Condition: WithAltWww
+    Properties:
+      HostedZoneId: !Ref AltHostedZoneId
+      Name: !Sub "www.${AltDomainName}"
       Type: AAAA
       AliasTarget:
         DNSName: !GetAtt Distribution.DomainName

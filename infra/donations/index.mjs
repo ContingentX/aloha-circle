@@ -34,6 +34,8 @@ const ALLOWED_ORIGINS = [
   'https://alohalive.net',
   'https://www.alohalive.net',
   'https://dev.alohalive.net',
+  'https://aloha-circle.com',
+  'https://www.aloha-circle.com',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
 ];

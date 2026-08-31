@@ -5,9 +5,10 @@
 set -euo pipefail
 
 ENV="${1:-}"
+# ALT_DOMAIN serves the same distribution under a second apex (empty = none).
 case "$ENV" in
-  dev)  DOMAIN="dev.alohalive.net"; CREATE_WWW="false" ;;
-  prod) DOMAIN="alohalive.net";     CREATE_WWW="true" ;;
+  dev)  DOMAIN="dev.alohalive.net"; CREATE_WWW="false"; ALT_DOMAIN="";                ALT_ZONE_ID="" ;;
+  prod) DOMAIN="alohalive.net";     CREATE_WWW="true";  ALT_DOMAIN="aloha-circle.com"; ALT_ZONE_ID="Z04064321OCFAQ8E2HIKK" ;;
   *) echo "usage: $0 <dev|prod>" >&2; exit 1 ;;
 esac
 
@@ -15,6 +16,13 @@ REGION="us-east-1"
 PROJECT="alohalive"
 HOSTED_ZONE_ID="Z07263701EFGE2972ASGC"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# The alt-domain pair must be set together (site.yaml's Rules enforce this at
+# stack execution; failing here is immediate and costs nothing).
+if { [ -n "$ALT_DOMAIN" ] && [ -z "$ALT_ZONE_ID" ]; } || { [ -z "$ALT_DOMAIN" ] && [ -n "$ALT_ZONE_ID" ]; }; then
+  echo "error: ALT_DOMAIN and ALT_ZONE_ID must be provided together (got ALT_DOMAIN='$ALT_DOMAIN', ALT_ZONE_ID='$ALT_ZONE_ID')" >&2
+  exit 1
+fi
 
 echo "==> [$ENV] Deploying site stack (${PROJECT}-site-${ENV}) — first run creates ACM + CloudFront, 15-25 min"
 aws cloudformation deploy \
@@ -26,11 +34,13 @@ aws cloudformation deploy \
     Environment="$ENV" \
     DomainName="$DOMAIN" \
     CreateWww="$CREATE_WWW" \
-    HostedZoneId="$HOSTED_ZONE_ID"
+    HostedZoneId="$HOSTED_ZONE_ID" \
+    AltDomainName="$ALT_DOMAIN" \
+    AltHostedZoneId="$ALT_ZONE_ID"
 
 echo "==> [$ENV] Deploying donations API stack (alohalive-donations)"
 aws cloudformation deploy \
-  --template-file "$ROOT/infra/donations.yaml" \
+  --template-file "$ROOT/infra/donations/donations.yaml" \
   --stack-name "alohalive-donations" \
   --region "$REGION" \
   --capabilities CAPABILITY_NAMED_IAM \
