@@ -29,6 +29,21 @@ Parameters:
     Default: ""
     Description: Hosted zone id for AltDomainName. Required when AltDomainName is set.
 
+# The alt-domain parameters only work as a pair: the cert validation and the
+# Alt* Route53 records both need the zone id. Reject a half-specified pair at
+# changeset time with a descriptive error instead of failing mid-deploy.
+Rules:
+  AltDomainRequiresZone:
+    RuleCondition: !Not [!Equals [!Ref AltDomainName, ""]]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref AltHostedZoneId, ""]]
+        AssertDescription: AltHostedZoneId is required when AltDomainName is set.
+  AltZoneRequiresDomain:
+    RuleCondition: !Not [!Equals [!Ref AltHostedZoneId, ""]]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref AltDomainName, ""]]
+        AssertDescription: AltDomainName is required when AltHostedZoneId is set.
+
 Conditions:
   WithWww: !Equals [!Ref CreateWww, "true"]
   WithAlt: !Not [!Equals [!Ref AltDomainName, ""]]
