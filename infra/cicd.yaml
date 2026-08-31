@@ -11,6 +11,10 @@ Parameters:
   HostedZoneId:
     Type: String
     Default: Z07263701EFGE2972ASGC
+  AltHostedZoneId:
+    Type: String
+    Default: Z04064321OCFAQ8E2HIKK
+    Description: aloha-circle.com zone — the deploy role writes ACM validation + alias records here (site.yaml AltDomainName).
   # This repo was created after GitHub switched new repos to immutable ID-embedded
   # OIDC subjects, so tokens carry repo:<org>@<org-id>/<repo>@<repo-id>:... — see
   # GET /repos/{org}/{repo}/actions/oidc/customization/sub.
@@ -88,6 +92,7 @@ Resources:
                   - route53:ChangeResourceRecordSets
                 Resource:
                   - !Sub "arn:aws:route53:::hostedzone/${HostedZoneId}"
+                  - !Sub "arn:aws:route53:::hostedzone/${AltHostedZoneId}"
                   - arn:aws:route53:::change/*
               - Sid: Route53List
                 Effect: Allow
