@@ -5,11 +5,26 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 
-const DATA_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data');
-const COLLECTIONS = ['visitors', 'locals', 'nonprofits', 'causes', 'endorsements', 'matches'];
+const DEFAULT_DATA_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data');
+const COLLECTIONS = [
+  'visitors',
+  'locals',
+  'nonprofits',
+  'causes',
+  'endorsements',
+  'matches',
+  'sessions',
+  'introductions',
+];
+
+export function getDataDir() {
+  return process.env.ALOHALIVE_DATA_DIR
+    ? path.resolve(process.env.ALOHALIVE_DATA_DIR)
+    : DEFAULT_DATA_DIR;
+}
 
 function file(collection) {
-  return path.join(DATA_DIR, `${collection}.json`);
+  return path.join(getDataDir(), `${collection}.json`);
 }
 
 export function load(collection) {
@@ -21,7 +36,7 @@ export function load(collection) {
 }
 
 export function save(collection, records) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.mkdirSync(getDataDir(), { recursive: true });
   fs.writeFileSync(file(collection), JSON.stringify(records, null, 2));
   return records;
 }
@@ -32,6 +47,19 @@ export function insert(collection, record) {
   records.push(withId);
   save(collection, records);
   return withId;
+}
+
+export function findById(collection, id) {
+  return load(collection).find((record) => record.id === id) ?? null;
+}
+
+export function updateById(collection, id, patch) {
+  const records = load(collection);
+  const index = records.findIndex((record) => record.id === id);
+  if (index < 0) return null;
+  records[index] = { ...records[index], ...patch, updatedAt: new Date().toISOString() };
+  save(collection, records);
+  return records[index];
 }
 
 // Upsert keyed by a natural key (used by ingest so re-scrapes don't duplicate causes).

@@ -104,6 +104,13 @@ input, select {
 
 .match-card { border: 2px solid var(--palm); }
 
+.agent-receipt {
+  margin-top: 16px; padding: 12px; border: 1px solid #9ed6bd; border-radius: 12px;
+  background: #eefaf4; color: var(--ocean-deep); font-size: 0.9rem;
+}
+.agent-receipt p { margin: 4px 0; }
+.agent-receipt a { color: var(--ocean); }
+
 .hint { color: #5a7484; font-size: 0.9rem; }
 .error { color: #b3261e; }
 .tags { color: var(--ocean); font-size: 0.85rem; margin: 2px 0 0; }

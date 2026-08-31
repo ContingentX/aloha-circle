@@ -8,6 +8,9 @@ import { World } from './World.jsx';
 import { AlohaCircle } from './AlohaCircle.jsx';
 import { FEATURED_NONPROFITS } from './nonprofits.js';
 
+const TRUEFORGE_DEMO_ENABLED = import.meta.env.VITE_TRUEFORGE_DEMO === 'true';
+const AGENT_CONSOLE_URL = import.meta.env.VITE_AGENT_CONSOLE_URL ?? '/agent-console';
+
 const INTEREST_OPTIONS = [
   'ocean', 'diving', 'hiking', 'wildlife', 'photography', 'farming',
   'cooking', 'community', 'trails', 'reef', 'family', 'music',
@@ -30,7 +33,7 @@ function InterestPicker({ selected, onToggle }) {
   );
 }
 
-function MatchCard({ match }) {
+function MatchCard({ match, agent }) {
   return (
     <div className="card match-card">
       <h3>🌊 Your Maui Match</h3>
@@ -38,6 +41,14 @@ function MatchCard({ match }) {
       <p><strong>Cause:</strong> {match.cause}</p>
       <p><strong>Why:</strong> {match.why}</p>
       <p><strong>Today:</strong> {match.suggestedAction}</p>
+      {agent && (
+        <div className="agent-receipt">
+          <p><strong>Named TrueForge agent:</strong> <code>{agent.name}</code></p>
+          <p><strong>Aloha Agent:</strong> {agent.pendingApprovals?.length ? 'Waiting for human approval' : agent.status}</p>
+          <p>{agent.eventCount} TrueForge events · session <code>{agent.trueforgeSessionId}</code></p>
+          <a href={AGENT_CONSOLE_URL} target="_blank" rel="noreferrer">Open the TrueForge operator view ↗</a>
+        </div>
+      )}
     </div>
   );
 }
@@ -46,49 +57,66 @@ function VisitorTab() {
   const [name, setName] = useState('');
   const [interests, setInterests] = useState([]);
   const [match, setMatch] = useState(null);
+  const [agent, setAgent] = useState(null);
+  const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const toggle = (tag) =>
     setInterests((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
 
-  // If the Aloha Agent API is unreachable, never dead-end the flow: match
-  // against the static featured-nonprofits list instead.
   const fallbackMatch = () => {
-    const np = FEATURED_NONPROFITS.find((n) => n.causeTags.some((t) => interests.includes(t)))
-      ?? FEATURED_NONPROFITS[0];
+    const nonprofit = FEATURED_NONPROFITS.find((item) =>
+      item.causeTags.some((tag) => interests.includes(tag))) ?? FEATURED_NONPROFITS[0];
     return {
-      localName: 'Leilani', localTown: 'Paia',
-      cause: np.name,
-      why: `You picked ${interests.join(', ')} - ${np.tagline}.`,
-      suggestedAction: np.experience,
+      localName: 'Leilani',
+      localTown: 'Paia',
+      cause: nonprofit.name,
+      why: `You picked ${interests.join(', ')} - ${nonprofit.tagline}.`,
+      suggestedAction: nonprofit.experience,
     };
   };
 
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true);
+    setError(null);
+    setAgent(null);
     try {
-      const { match } = await api.post('/api/visitors', { name, interests });
-      setMatch(match);
-    } catch {
-      setMatch(fallbackMatch());
+      const result = await api.post(
+        TRUEFORGE_DEMO_ENABLED ? '/api/agent/runs' : '/api/visitors',
+        { name, interests },
+      );
+      if (!result.match) throw new Error('No eligible Maui match is available yet.');
+      setMatch(result.match);
+      setAgent(TRUEFORGE_DEMO_ENABLED ? result.agent : null);
+    } catch (requestError) {
+      if (TRUEFORGE_DEMO_ENABLED) {
+        setError(requestError instanceof Error ? requestError.message : 'Matching failed.');
+      } else {
+        setMatch(fallbackMatch());
+      }
     } finally {
       setBusy(false);
     }
   };
 
   if (match) {
-    return <MatchCard match={match} />;
+    return <MatchCard match={match} agent={agent} />;
   }
 
   return (
     <form className="card" onSubmit={submit}>
       <h3>What brought you to Maui?</h3>
       <input placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} required />
-      <p className="hint">Pick what you love — the Aloha Agent finds a local, a cause, and something you can do today.</p>
+      <p className="hint">
+        {TRUEFORGE_DEMO_ENABLED
+          ? 'Pick what you love — the named Aloha Agent runs in TrueForge and pauses before any introduction.'
+          : 'Pick what you love — AlohaLive finds a local, a cause, and something you can do today.'}
+      </p>
       <InterestPicker selected={interests} onToggle={toggle} />
+      {error && <p className="error" role="alert">{error}</p>}
       <button className="cta" disabled={busy || !name || interests.length === 0}>
-        {busy ? 'Matching…' : 'Meet Maui'}
+        {busy ? (TRUEFORGE_DEMO_ENABLED ? 'Running Aloha Agent…' : 'Matching…') : 'Meet Maui'}
       </button>
     </form>
   );
@@ -99,8 +127,10 @@ function LocalTab() {
   const [town, setTown] = useState('');
   const [interests, setInterests] = useState([]);
   const [done, setDone] = useState(false);
+  const [localId, setLocalId] = useState(null);
   const [nonprofits, setNonprofits] = useState([]);
   const [error, setError] = useState(null);
+  const [notice, setNotice] = useState(null);
 
   useEffect(() => {
     api.get('/api/nonprofits')
@@ -115,7 +145,8 @@ function LocalTab() {
     e.preventDefault();
     setError(null);
     try {
-      await api.post('/api/locals', { name, town, interests, causes: interests });
+      const local = await api.post('/api/locals', { name, town, interests, causes: interests });
+      setLocalId(local.id);
       setDone(true);
     } catch (err) {
       setError(err.message);
@@ -124,8 +155,13 @@ function LocalTab() {
 
   const endorse = async (nonprofit, verdict) => {
     setError(null);
+    setNotice(null);
     try {
-      await api.post('/api/endorsements', { local: name || 'anonymous local', nonprofit: nonprofit.name, verdict });
+      await api.post('/api/endorsements', {
+        local: name || 'anonymous local', localId,
+        nonprofit: nonprofit.name, nonprofitId: nonprofit.id, verdict,
+      });
+      setNotice('Mahalo — your endorsement is pending verification.');
       const list = await api.get('/api/nonprofits');
       setNonprofits(Array.isArray(list) ? list : []);
     } catch (err) {
@@ -146,7 +182,7 @@ function LocalTab() {
           <button className="cta" disabled={!name || interests.length === 0}>Join as a local</button>
         </form>
       ) : (
-        <div className="card"><h3>Mahalo, {name}! You're on the local roster.</h3></div>
+        <div className="card"><h3>Mahalo, {name}! Your local profile is pending verification.</h3></div>
       )}
       <div className="card">
         <h3>Is this helping Maui?</h3>
@@ -166,12 +202,14 @@ function LocalTab() {
           </div>
         ))}
       </div>
+      {notice && <p className="hint">{notice}</p>}
       {error && <p className="error">{error}</p>}
     </div>
   );
 }
 
 function NonprofitTab() {
+  const { user, ready } = useAuth();
   const [form, setForm] = useState({ name: '', website: '', causeTags: '' });
   const [done, setDone] = useState(false);
   const [error, setError] = useState(null);
@@ -191,12 +229,15 @@ function NonprofitTab() {
     }
   };
 
+  if (!ready) return null;
+  if (!user) return <NpoVerifyCard />;
+
   if (done) {
     return (
       <div>
         <NpoVerifyCard />
         <ExperienceManager />
-        <div className="card"><h3>Mahalo! {form.name} is listed — locals can now endorse you.</h3></div>
+        <div className="card"><h3>Mahalo! {form.name} was submitted and is pending verification.</h3></div>
       </div>
     );
   }
@@ -231,8 +272,8 @@ function NeedsTab() {
 
   return (
     <div className="card">
-      <h3>Maui Needs Index — live</h3>
-      <p className="hint">Continuously ingested by the Aloha Agent from local nonprofit boards, news and event pages.</p>
+      <h3>Maui Needs Index — demo data</h3>
+      <p className="hint">Loaded from DynamoDB now; the Aloha Agent will refresh these records from source-backed feeds.</p>
       {error && <p className="error">{error}</p>}
       {causes.map((c) => (
         <div key={c.id} className="cause-row">
