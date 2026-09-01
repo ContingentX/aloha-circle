@@ -1,6 +1,6 @@
 import { auth } from './firebase.js';
 
-// The AlohaLive API (Lambda behind API Gateway) — profiles, verification,
+// The Aloha Circle API (Lambda behind API Gateway) — profiles, verification,
 // experiences, donations. Distinct from ./api.js, which talks to the local
 // agentharness matcher in dev. Deploy workflows configure the endpoint via
 // VITE_API_BASE (per-environment repo vars); VITE_API remains an explicit

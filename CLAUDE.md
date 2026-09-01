@@ -1,11 +1,11 @@
-# AlohaLive — project rules
+# Aloha Circle — project rules
 
 Monorepo: `/www` (Vite React site), `/app` (Expo RN app), `/agentharness` (Node agent: API :8787 + ingest + matcher). All three share the data model in `agentharness/src/store.js`; www and app are thin clients of the harness API.
 
 ## Commands
 
 - Harness: `cd agentharness && npm start` (API + ingest loop), `npm test` (smoke test)
-- Site: `cd www && npm run dev` (proxies `/api` → :8787), `npm run build` (static → `www/dist`, deployed to the alohalive.net S3 bucket)
+- Site: `cd www && npm run dev` (proxies `/api` → :8787), `npm run build` (static → `www/dist`, deployed to the site S3 bucket (aloha-circle.com))
 - App: `cd app && npx expo start`
 
 ## Rules

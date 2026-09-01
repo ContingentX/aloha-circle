@@ -9,7 +9,7 @@ import { appApi } from './appApi.js';
 //   /appreturn?next=<deep-link>&spin=cs_... → <deep-link>#spin=cs_...
 // Only app schemes may be redirect targets — never http(s), so these pages
 // can't be used as open redirectors.
-const APP_SCHEME = /^(exp|exps|alohalive):\/\//;
+const APP_SCHEME = /^(exp|exps|aloha-circle|alohalive):\/\//;
 
 const target = (param) => {
   const uri = new URLSearchParams(window.location.search).get(param) ?? '';

@@ -1,4 +1,4 @@
-// AlohaLive API — Lambda (Node 20, no bundled deps; AWS SDK v3 ships in the runtime).
+// Aloha Circle API — Lambda (Node 20, no bundled deps; AWS SDK v3 ships in the runtime).
 // All app data lives in AWS: DynamoDB (profiles, verification, experiences,
 // donations, giveaway counters), S3 (residency-proof uploads), SES (nonprofit
 // domain-proof codes). Firebase is used ONLY as the Google sign-in door: authed
@@ -29,13 +29,16 @@ const ses = new SESv2Client({});
 const TABLE = process.env.TABLE ?? 'alohalive';
 const BUCKET = process.env.VERIFY_BUCKET;
 const FIREBASE_PROJECT = 'contingentx-b0eab';
-const FROM_EMAIL = 'verify@alohalive.net';
+// aloha-circle.com is SES-verified (domain identity + Easy DKIM, 2026-09-01).
+const FROM_EMAIL = 'verify@aloha-circle.com';
 const ALLOWED_ORIGINS = [
-  'https://alohalive.net',
-  'https://www.alohalive.net',
-  'https://dev.alohalive.net',
   'https://aloha-circle.com',
   'https://www.aloha-circle.com',
+  'https://dev.aloha-circle.com',
+  // Legacy origins: the shared backend serves prod until its promotion flips
+  // alohalive.net to a 301 — drop these once the prod redirect is live.
+  'https://alohalive.net',
+  'https://www.alohalive.net',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
 ];
@@ -340,11 +343,11 @@ async function donate(body, origin) {
   if (!exp || exp.active !== true) return resp(404, { error: 'experience not available' }, origin);
   const amount = Math.floor(Number(body.amountUsd));
   if (!(amount >= exp.minDonation)) return resp(400, { error: `minimum donation is $${exp.minDonation}` }, origin);
-  const site = ALLOWED_ORIGINS.includes(origin) ? origin : 'https://alohalive.net';
+  const site = ALLOWED_ORIGINS.includes(origin) ? origin : 'https://aloha-circle.com';
   // Native app: bounce Stripe's redirect through /appreturn back into the app's
   // deep link. Only app schemes are accepted, so this can't become an open redirect.
   const appReturn = String(body.appReturn ?? '');
-  const app = /^(exp|exps|alohalive):\/\/\S+$/.test(appReturn) ? encodeURIComponent(appReturn) : null;
+  const app = /^(exp|exps|aloha-circle|alohalive):\/\/\S+$/.test(appReturn) ? encodeURIComponent(appReturn) : null;
   const session = await stripe('/checkout/sessions', {
     mode: 'payment',
     'line_items[0][quantity]': '1',
