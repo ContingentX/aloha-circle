@@ -13,7 +13,7 @@ const DIVES = [1, 2, 3, 4, 5].map((n) => `${M}/dive_${n}.mp4`);
 const CONNS = [1, 2, 3, 4].map((n) => `${M}/conn_${n}.mp4`);
 
 const CONFIG = {
-  brand: { name: 'AlohaLive', href: '#top' },
+  brand: { name: 'Aloha Circle', href: '#top', logo: '/aloha-circle-logo.svg' },
   diveScroll: 1.25,
   connScroll: 0.85,
   hint: 'scroll to fly in',
@@ -50,7 +50,7 @@ const CONFIG = {
       tags: ['Sea turtles', 'Reef cleanups'],
     },
     {
-      id: 'circle', label: 'Celebrate', still: STILLS[4], clip: DIVES[4],
+      id: 'circle', label: 'Circle', still: STILLS[4], clip: DIVES[4],
       accent: '#ffd166', eyebrow: 'The Aloha Circle',
       title: 'Step into the Aloha Circle.',
       body: 'Land at OGG and the kiʻi of the Hawaiian akua are waiting at baggage claim — a small donation joins you to the ohana and opens an AR experience you carry across Maui.',

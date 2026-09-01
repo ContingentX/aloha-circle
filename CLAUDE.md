@@ -40,3 +40,8 @@ it lives in the site S3 buckets under `media/` (uploaded directly with
 as `/media/<name>`. `infra/deploy-web.sh` excludes `media/*` from its
 `--delete` sync so deploys never remove it. Don't ship third-party media URLs
 (e.g. buzz.masky.ai) in site code.
+
+Small first-party brand assets (logo SVG, favicons, app icons — a few KB) are
+NOT media: they ship in git under `www/public/` and are served from the site
+root. Do not place build-shipped files under `www/public/media/` — the deploy
+sync's `media/*` exclusion means they would never reach the bucket.

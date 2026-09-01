@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from './api.js';
 import { AuthProvider, useAuth } from './auth.jsx';
 import { AuthButton, LocalVerifyCard, NpoVerifyCard } from './Verify.jsx';
@@ -111,7 +111,7 @@ function VisitorTab() {
       <p className="hint">
         {TRUEFORGE_DEMO_ENABLED
           ? 'Pick what you love — the named Aloha Agent runs in TrueForge and pauses before any introduction.'
-          : 'Pick what you love — AlohaLive finds a local, a cause, and something you can do today.'}
+          : 'Pick what you love — Aloha Circle finds a local, a cause, and something you can do today.'}
       </p>
       <InterestPicker selected={interests} onToggle={toggle} />
       {error && <p className="error" role="alert">{error}</p>}
@@ -296,6 +296,36 @@ const TABS = [
   { id: 'needs', label: 'Live needs', el: <NeedsTab /> },
 ];
 
+// Fixed full-viewport backdrop for everything after the scroll-world flight: a
+// mostly-transparent Maui photo over the page gradient. During the hero's
+// end-of-track handoff it rides in glued to the top of the page content (the
+// hero's final scene rides up at the same rate just above it), then pins to the
+// viewport once the page owns the screen — a rich fixed background the sections
+// scroll over. Its top 30vh overhang is mask-faded so the seam blends into the
+// departing scene instead of cutting across it.
+function PageBackdrop({ wrapRef }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    let raf = 0;
+    const place = () => {
+      raf = 0;
+      if (!ref.current || !wrapRef.current) return;
+      const top = wrapRef.current.getBoundingClientRect().top;
+      ref.current.style.transform = `translateY(${Math.max(0, top)}px)`;
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(place); };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    place();
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, []);
+  return <div className="page-backdrop" ref={ref} aria-hidden="true" />;
+}
+
 // Role sections (visitor / local / nonprofit / live needs) live behind the
 // signed-in user chip; closes itself if the user signs out.
 function AccountSection({ onClose }) {
@@ -323,17 +353,22 @@ function AccountSection({ onClose }) {
 
 export default function App() {
   const [view, setView] = useState('home'); // 'home' | 'account'
+  const wrapRef = useRef(null);
   return (
     <AuthProvider>
     <World />
     {/* page-wrap paints above the hero's fixed layers (z-index > the stage's 120)
         so the app slides over the final scene and lands at the top of the screen;
         #app moves here so CTA anchors land at the true top. */}
-    <div className="page-wrap" id="app">
+    <div className="page-wrap" id="app" ref={wrapRef}>
+    <PageBackdrop wrapRef={wrapRef} />
     <div className="page">
       <header>
         <div className="header-row">
-          <h1>Aloha<span className="accent">Live</span></h1>
+          <div className="brand-lockup">
+            <img className="brand-logo" src="/aloha-circle-logo.svg" alt="" />
+            <h1>Aloha <span className="accent">Circle</span></h1>
+          </div>
           <AuthButton onOpenAccount={() => setView((v) => (v === 'account' ? 'home' : 'account'))} />
         </div>
         <p className="tagline">Don't just visit Maui. <strong>Meet Maui.</strong></p>
@@ -353,7 +388,8 @@ export default function App() {
         </>
       )}
       <footer>
-        <p>The Aloha Circle · Kahului Airport (OGG) · <a href="https://alohalive.net">alohalive.net</a></p>
+        <p>The Aloha Circle · Kahului Airport (OGG) · <a href="https://aloha-circle.com">aloha-circle.com</a></p>
+        <p className="credit">Background photo: Wailea, Maui by dronepicr (CC BY 2.0)</p>
       </footer>
     </div>
     </div>

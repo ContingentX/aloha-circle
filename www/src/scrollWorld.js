@@ -8,7 +8,7 @@
 
    USAGE
      const unmount = mountScrollWorld(document.getElementById('world'), {
-       brand: { name: 'Pearl & Co.', href: '#top' },
+       brand: { name: 'Pearl & Co.', href: '#top', logo: '/logo.svg' },  // logo optional; falls back to a gradient mark
        diveScroll: 1.3,   // viewport-heights of scroll per dive clip
        connScroll: 0.9,   // ...per connector clip
        hint: 'scroll to fly in',
@@ -129,7 +129,12 @@ function mountScrollWorld(container, config) {
   const topbar = el('div', 'sw-topbar');
   if (config.brand) {
     const brand = el('a', 'sw-brand'); brand.href = (config.brand.href || '#');
-    brand.appendChild(el('span', 'sw-brand__mark'));
+    if (config.brand.logo) {
+      const lg = el('img', 'sw-brand__logo'); lg.src = config.brand.logo; lg.alt = '';
+      brand.appendChild(lg);
+    } else {
+      brand.appendChild(el('span', 'sw-brand__mark'));
+    }
     const nm = el('span', 'sw-brand__name'); nm.textContent = config.brand.name || ''; brand.appendChild(nm);
     topbar.appendChild(brand);
   }
@@ -257,9 +262,18 @@ function mountScrollWorld(container, config) {
       if (y > s.start - 1.6 * vh && y < s.end + 1.6 * vh) loadClip(s);
       const local = clamp((y - s.start) / (s.end - s.start), 0, 1);
       s.target = s.linger ? lingerEase(local, s.linger) : local;
+      const isLast = i === NSEG - 1;
       let outside = 0;
-      if (y < s.start) outside = s.start - y; else if (y > s.end) outside = y - s.end;
-      const op = smooth(1 - outside / fade);
+      if (y < s.start) outside = s.start - y;
+      else if (y > s.end && !isLast) outside = y - s.end;
+      let op = smooth(1 - outside / fade);
+      // The final scene never dissolves at end-of-track — it rides up with the
+      // incoming page content instead (no dead gap of empty sky before the page).
+      // Under prefers-reduced-motion the full-viewport translation is itself the
+      // kind of motion the user opted out of, so the scene stays put and
+      // cross-dissolves over the handoff instead.
+      if (isLast && reduce) op *= smooth(1 - handoff);
+      s.el.style.transform = (isLast && !reduce && handoff > 0) ? `translateY(${(-handoff * 100).toFixed(2)}vh)` : '';
       s.el.style.opacity = op; s.visible = op > 0.001;
       s.el.style.zIndex = (i === ci) ? '120' : String(100 + Math.round(op * 10));
       if (!s.hasClip || !s.ready) {
@@ -272,10 +286,13 @@ function mountScrollWorld(container, config) {
       const seg = SECTIONS[i]._seg;
       const pr = clamp((y - seg.start) / (seg.end - seg.start), 0, 1);
       const before = y < seg.start, after = y > seg.end;
+      // Copy holds a solid plateau through the middle of each scene (so a nav
+      // jump — which lands mid-scene — always finds fully readable text), fades
+      // in early and only lets go near the seams.
       let cop;
-      if (i === 0) cop = after ? 0 : smooth(1 - pr / 0.62);            // greets on landing
-      else if (i === N - 1) cop = before ? 0 : smooth(pr / 0.4) * smooth(1 - handoff); // holds CTA, then yields to the page
-      else cop = (before || after) ? 0 : smooth(1 - Math.abs(pr - 0.5) / 0.5);
+      if (i === 0) cop = after ? 0 : smooth(1 - Math.max(0, pr - 0.5) / 0.45);   // greets on landing, solid to mid-scene
+      else if (i === N - 1) cop = before ? 0 : smooth(pr / 0.25) * smooth(1 - handoff); // in fast, holds CTA, yields to the page
+      else cop = (before || after) ? 0 : smooth(Math.min(1, pr / 0.28, (1 - pr) / 0.28));
       const c = copies[i];
       c.style.opacity = cop;
       c.style.transform = reduce ? 'none' : `translateY(${(0.5 - pr) * 4}vh)`;
@@ -437,13 +454,14 @@ function injectCSS() {
   .sw-topbar{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:clamp(14px,2.4vw,26px) clamp(18px,5vw,64px);}
   .sw-brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--sw-ink);}
   .sw-brand__mark{width:24px;height:28px;border-radius:7px 7px 10px 10px;background:linear-gradient(160deg,var(--sw-accent),color-mix(in srgb,var(--sw-accent) 60%,#000));box-shadow:0 6px 14px color-mix(in srgb,var(--sw-accent) 40%,transparent);}
+  .sw-brand__logo{width:30px;height:30px;display:block;}
   .sw-brand__name{font-family:var(--sw-font-display);font-weight:700;font-size:1.1rem;}
   .sw-nav{display:flex;gap:4px;padding:5px;background:color-mix(in srgb,#fff 55%,transparent);backdrop-filter:blur(10px);border:1px solid color-mix(in srgb,var(--sw-accent) 16%,transparent);border-radius:999px;}
   .sw-nav__item{font:inherit;font-size:.82rem;color:var(--sw-ink-soft);border:0;background:transparent;cursor:pointer;padding:7px 14px;border-radius:999px;transition:color .25s,background .25s;}
   .sw-nav__item:hover{color:var(--sw-ink);} .sw-nav__item.is-active{color:#fff;background:var(--sw-accent);}
   .sw-topcta{text-decoration:none;font-weight:600;font-size:.9rem;color:#fff;background:var(--sw-ink);padding:10px 20px;border-radius:999px;white-space:nowrap;}
   .sw-stage{position:fixed;inset:0;z-index:10;pointer-events:none;}
-  .sw-scene{position:absolute;inset:0;opacity:0;overflow:hidden;will-change:opacity;}
+  .sw-scene{position:absolute;inset:0;opacity:0;overflow:hidden;will-change:opacity,transform;}
   .sw-scene__video,.sw-scene__still{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 42%;}
   .sw-scene__still{will-change:transform;} .sw-scene.has-clip .sw-scene__still{opacity:0;} .sw-scene__video{z-index:1;}
   .sw-copylayer{position:fixed;inset:0;z-index:20;pointer-events:none;}
