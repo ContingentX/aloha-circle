@@ -1,4 +1,4 @@
-// AlohaLive mobile MVP: Google sign-in + donate-and-spin wheel against the
+// Aloha Circle mobile MVP: Google sign-in + donate-and-spin wheel against the
 // hosted AWS API, plus the visitor→match flow against the agentharness API.
 // Sign-in and Stripe Checkout run in the system browser via the web bridge
 // pages (/applogin, /appreturn) and hand back to us through our deep link.
@@ -321,7 +321,7 @@ export default function App() {
       <StatusBar style="dark" />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.h1}>
-          Aloha<Text style={styles.accent}>Live</Text>
+          Aloha <Text style={styles.accent}>Circle</Text>
         </Text>
         <Text style={styles.tagline}>Don't just visit Maui. Meet Maui.</Text>
 

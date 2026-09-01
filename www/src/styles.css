@@ -18,16 +18,38 @@ body {
 }
 
 /* Full-bleed wrapper above the hero's fixed layers: during the end-of-track
-   handoff the app slides over the final scene, so it needs its own opaque
-   background (top color matches the hero's --sw-bg for an invisible seam). */
-.page-wrap { position: relative; z-index: 200; background: linear-gradient(180deg, #fdf6ec 0%, #e8f4f8 100%); }
-.page { max-width: 720px; margin: 0 auto; padding: 24px 16px 48px; }
+   handoff the app slides over the final scene. Its background is the fixed
+   .page-backdrop below (not an opaque fill), so the Maui photo can sit behind
+   every post-scroll section. */
+.page-wrap { position: relative; z-index: 200; }
+.page { position: relative; z-index: 1; max-width: 720px; margin: 0 auto; padding: 24px 16px 48px; }
+
+/* Rich fixed backdrop for the post-scroll page: opaque sand gradient base with
+   the Maui photo washed mostly transparent on top. JS translates it so it rides
+   in glued to the page content during the hero handoff, then pins at 0. The
+   30vh overhang above the viewport is mask-faded so it blends into the hero's
+   departing final scene rather than cutting a hard seam across it. */
+.page-backdrop {
+  position: fixed; left: 0; top: -30vh; width: 100%; height: 130vh;
+  z-index: 0; pointer-events: none; will-change: transform;
+  background:
+    linear-gradient(180deg, rgba(253, 246, 236, 0.66) 0%, rgba(253, 246, 236, 0.58) 42%, rgba(232, 244, 248, 0.78) 100%),
+    url('/media/maui-bg.webp') center / cover no-repeat,
+    linear-gradient(180deg, #fdf6ec 0%, #e8f4f8 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 30vh);
+  mask-image: linear-gradient(180deg, transparent 0, #000 30vh);
+}
+
+.brand-lockup { display: flex; align-items: center; gap: 12px; }
+.brand-logo { width: 46px; height: 46px; display: block; }
 
 header h1 { font-size: 2.6rem; margin: 0; color: var(--ocean-deep); }
 header .accent { color: var(--coral); }
 .tagline { margin: 4px 0 20px; font-size: 1.1rem; color: var(--ocean); }
 
-nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+/* Scoped to .page: a bare `nav` selector is unlayered and would override the
+   hero engine's layered .sw-nav rules (e.g. its mobile display:none). */
+.page nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
 .tab {
   border: 1px solid var(--ocean); background: transparent; color: var(--ocean);
   border-radius: 999px; padding: 8px 16px; cursor: pointer; font-size: 0.95rem;
@@ -130,6 +152,7 @@ input, select {
 
 footer { margin-top: 32px; text-align: center; color: #5a7484; font-size: 0.85rem; }
 footer a { color: var(--ocean); }
+footer .credit { margin-top: 4px; font-size: 0.72rem; opacity: 0.75; }
 
 /* ── Live Maui signals strip ─────────────────────────────────────────── */
 .live-strip {

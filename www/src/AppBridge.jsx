@@ -39,10 +39,10 @@ function AppLogin() {
     }
   };
 
-  if (!ret) return <p className="error">Missing or invalid return link — open this page from the AlohaLive app.</p>;
+  if (!ret) return <p className="error">Missing or invalid return link — open this page from the Aloha Circle app.</p>;
   return (
     <>
-      <p>Sign in to AlohaLive with your Google account, then you'll be sent right back to the app.</p>
+      <p>Sign in to Aloha Circle with your Google account, then you'll be sent right back to the app.</p>
       <button className="cta" disabled={busy} onClick={signIn}>
         {busy ? 'Signing in…' : 'Continue with Google'}
       </button>
@@ -60,11 +60,11 @@ function AppReturn() {
     if (href) window.location.replace(href);
   }, [href]);
 
-  if (!href) return <p className="error">Missing or invalid return link — open this page from the AlohaLive app.</p>;
+  if (!href) return <p className="error">Missing or invalid return link — open this page from the Aloha Circle app.</p>;
   return (
     <>
       <p>{spin ? 'Mahalo for your donation! 🌺' : 'Taking you back…'}</p>
-      <a className="cta" href={href}>Return to the AlohaLive app</a>
+      <a className="cta" href={href}>Return to the Aloha Circle app</a>
     </>
   );
 }
