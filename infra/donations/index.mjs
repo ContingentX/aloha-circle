@@ -187,24 +187,24 @@ async function npoSendCode(user, body, origin) {
     },
   }));
   await ses.send(new SendEmailCommand({
-    FromEmailAddress: `AlohaLive <${FROM_EMAIL}>`,
+    FromEmailAddress: `Aloha Circle <${FROM_EMAIL}>`,
     Destination: { ToAddresses: [email] },
     Content: {
       Simple: {
-        Subject: { Data: `${code} — AlohaLive nonprofit verification` },
+        Subject: { Data: `${code} — Aloha Circle nonprofit verification` },
         Body: {
           Text: {
             Data:
 `Aloha!
 
-Someone signed in as ${user.email} is claiming ${domain} for the nonprofit "${profile.orgName ?? domain}" on alohalive.net.
+Someone signed in as ${user.email} is claiming ${domain} for the nonprofit "${profile.orgName ?? domain}" on Aloha Circle (aloha-circle.com).
 
 Verification code: ${code}
 
-Enter it on alohalive.net to confirm. The code expires in 15 minutes. If this wasn't you, ignore this email.
+Enter it back on the site to confirm. The code expires in 15 minutes. If this wasn't you, ignore this email.
 
 Mahalo,
-AlohaLive`,
+Aloha Circle`,
           },
         },
       },
@@ -350,7 +350,7 @@ async function donate(body, origin) {
     'line_items[0][quantity]': '1',
     'line_items[0][price_data][currency]': 'usd',
     'line_items[0][price_data][unit_amount]': String(amount * 100),
-    'line_items[0][price_data][product_data][name]': `AlohaLive donation — spin for: ${exp.title}`,
+    'line_items[0][price_data][product_data][name]': `Aloha Circle donation — spin for: ${exp.title}`,
     success_url: app
       ? `${site}/appreturn?next=${app}&spin={CHECKOUT_SESSION_ID}`
       : `${site}/?spin={CHECKOUT_SESSION_ID}`,

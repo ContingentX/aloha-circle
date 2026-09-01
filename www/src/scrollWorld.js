@@ -266,10 +266,14 @@ function mountScrollWorld(container, config) {
       let outside = 0;
       if (y < s.start) outside = s.start - y;
       else if (y > s.end && !isLast) outside = y - s.end;
-      const op = smooth(1 - outside / fade);
+      let op = smooth(1 - outside / fade);
       // The final scene never dissolves at end-of-track — it rides up with the
       // incoming page content instead (no dead gap of empty sky before the page).
-      s.el.style.transform = (isLast && handoff > 0) ? `translateY(${(-handoff * 100).toFixed(2)}vh)` : '';
+      // Under prefers-reduced-motion the full-viewport translation is itself the
+      // kind of motion the user opted out of, so the scene stays put and
+      // cross-dissolves over the handoff instead.
+      if (isLast && reduce) op *= smooth(1 - handoff);
+      s.el.style.transform = (isLast && !reduce && handoff > 0) ? `translateY(${(-handoff * 100).toFixed(2)}vh)` : '';
       s.el.style.opacity = op; s.visible = op > 0.001;
       s.el.style.zIndex = (i === ci) ? '120' : String(100 + Math.round(op * 10));
       if (!s.hasClip || !s.ready) {

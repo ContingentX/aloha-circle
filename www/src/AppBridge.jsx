@@ -74,7 +74,10 @@ export default function AppBridge() {
   return (
     <div className="page">
       <header>
-        <h1>Aloha<span className="accent">Live</span></h1>
+        <div className="brand-lockup">
+          <img className="brand-logo" src="/aloha-circle-logo.svg" alt="" />
+          <h1>Aloha <span className="accent">Circle</span></h1>
+        </div>
       </header>
       <div className="card">
         <h3>{login ? '🤙 Sign in' : '🎡 Back to the app'}</h3>
