@@ -1,26 +1,33 @@
 {
   "expo": {
-    "name": "AlohaLive",
-    "slug": "alohalive",
-    "scheme": "alohalive",
+    "name": "Aloha Circle",
+    "slug": "aloha-circle",
+    "scheme": ["aloha-circle", "alohalive"],
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
     "splash": {
-      "backgroundColor": "#0b5d8a"
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#fdf6ec"
     },
     "ios": {
       "supportsTablet": true
     },
     "android": {
-      "package": "net.alohalive.app"
+      "package": "com.alohacircle.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#fdf6ec"
+      }
     },
     "plugins": [
       "expo-asset",
       [
         "expo-camera",
         {
-          "cameraPermission": "AlohaLive scans your boarding-pass barcode on-device to verify your trip. The image never leaves your phone."
+          "cameraPermission": "Aloha Circle scans your boarding-pass barcode on-device to verify your trip. The image never leaves your phone."
         }
       ]
     ]

@@ -32,7 +32,7 @@ export function AuthProvider({ children }) {
       return profile;
     } catch (err) {
       // surface API-unreachable instead of silently degrading (AGENTS.md rule)
-      setProfileError('The AlohaLive profile service is unreachable right now — verification and donations may be limited.');
+      setProfileError('The Aloha Circle profile service is unreachable right now — verification and donations may be limited.');
       throw err;
     }
   }, []);

@@ -1,6 +1,6 @@
 # Auth, verification & donations — AWS architecture
 
-All AlohaLive app data lives in AWS. Firebase appears in exactly one place: as
+All Aloha Circle app data lives in AWS. Firebase appears in exactly one place: as
 the **Google sign-in door** — the ContingentX org Firebase project
 (`contingentx-b0eab`) already has a working Google OAuth client, so the site
 uses `signInWithPopup` from it and sends the resulting ID token to our API,
@@ -12,7 +12,7 @@ Google. (Swapping to Cognito later only changes the token issuer check.)
 | API | Lambda `alohalive-donations` behind API Gateway HTTP API (`alohalive-api`), stack `alohalive-donations`, code `infra/donations/index.mjs` |
 | Data | DynamoDB table `alohalive` (single-table: `USER#uid/PROFILE`, `USER#uid/CODE`, `EXP#id/META`, `DON#sessionId/META`, `CNT#expId/period`) |
 | Residency uploads | S3 `alohalive-verify-<account>` (private; presigned PUT from `/local/submit`) |
-| Domain-proof email | SES from `verify@alohalive.net` (identity + DKIM in Route 53; account has production access) |
+| Domain-proof email | SES from `verify@aloha-circle.com` (identity + DKIM in Route 53 for both domains; account has production access) |
 | Stripe | secret key in SSM `/alohalive/prod/STRIPE_SECRET_KEY` (**live key** — real charges) |
 
 Function URLs are blocked account-wide (org policy) — that's why API Gateway.

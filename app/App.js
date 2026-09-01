@@ -1,4 +1,4 @@
-// AlohaLive mobile MVP: Google sign-in + donate-and-spin wheel against the
+// Aloha Circle mobile MVP: Google sign-in + donate-and-spin wheel against the
 // hosted AWS API, plus the visitor→match flow against the agentharness API.
 // Sign-in and Stripe Checkout run in the system browser via the web bridge
 // pages (/applogin, /appreturn) and hand back to us through our deep link.
@@ -14,11 +14,11 @@ import BoardingPassCard from './BoardingPass.jsx';
 import { styles } from './styles.js';
 
 // Both hosts are overridable at build time (EXPO_PUBLIC_* vars are inlined by
-// Expo); production builds set EXPO_PUBLIC_BRIDGE_BASE=https://alohalive.net
+// Expo); production builds set EXPO_PUBLIC_BRIDGE_BASE=https://aloha-circle.com
 // instead of relying on the dev site.
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'https://vsrvqrddll.execute-api.us-east-1.amazonaws.com';
 // The web app that hosts the sign-in and Stripe-return bridge pages.
-const BRIDGE_BASE = process.env.EXPO_PUBLIC_BRIDGE_BASE ?? 'https://dev.alohalive.net';
+const BRIDGE_BASE = process.env.EXPO_PUBLIC_BRIDGE_BASE ?? 'https://dev.aloha-circle.com';
 
 const INTERESTS = ['ocean', 'diving', 'hiking', 'wildlife', 'photography', 'farming', 'cooking', 'community'];
 
@@ -321,7 +321,7 @@ export default function App() {
       <StatusBar style="dark" />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.h1}>
-          Aloha<Text style={styles.accent}>Live</Text>
+          Aloha <Text style={styles.accent}>Circle</Text>
         </Text>
         <Text style={styles.tagline}>Don't just visit Maui. Meet Maui.</Text>
 

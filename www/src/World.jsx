@@ -13,7 +13,7 @@ const DIVES = [1, 2, 3, 4, 5].map((n) => `${M}/dive_${n}.mp4`);
 const CONNS = [1, 2, 3, 4].map((n) => `${M}/conn_${n}.mp4`);
 
 const CONFIG = {
-  brand: { name: 'AlohaLive', href: '#top' },
+  brand: { name: 'Aloha Circle', href: '#top', logo: '/aloha-circle-logo.svg' },
   diveScroll: 1.25,
   connScroll: 0.85,
   hint: 'scroll to fly in',
@@ -37,8 +37,8 @@ const CONFIG = {
     {
       id: 'grow', label: 'Give', still: STILLS[2], clip: DIVES[2],
       accent: '#1c7c54', eyebrow: 'Give a morning',
-      title: 'Causes are alive up here.',
-      body: 'Plant nursery trees for Lāhainā families, work a farm row, pack food boxes — every match comes with something you can do today.',
+      title: 'Welcome to the Ohana',
+      body: "You are a Voluntourist: plant trees for Lāhainā families, work a farm row, or pack food boxes before your won experience brings you together with a Maui resident. Share your conversations and ratings in Aloha Circle so locals and visitors can create a better Maui. Now we're family.",
       tags: ['Treecovery', 'Hua Momona Farms'],
       scroll: 1.5, linger: 0.4,
     },
@@ -50,7 +50,7 @@ const CONFIG = {
       tags: ['Sea turtles', 'Reef cleanups'],
     },
     {
-      id: 'circle', label: 'Celebrate', still: STILLS[4], clip: DIVES[4],
+      id: 'circle', label: 'Circle', still: STILLS[4], clip: DIVES[4],
       accent: '#ffd166', eyebrow: 'The Aloha Circle',
       title: 'Step into the Aloha Circle.',
       body: 'Land at OGG and the kiʻi of the Hawaiian akua are waiting at baggage claim — a small donation joins you to the ohana and opens an AR experience you carry across Maui.',

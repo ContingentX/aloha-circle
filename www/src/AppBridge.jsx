@@ -9,7 +9,7 @@ import { appApi } from './appApi.js';
 //   /appreturn?next=<deep-link>&spin=cs_... → <deep-link>#spin=cs_...
 // Only app schemes may be redirect targets — never http(s), so these pages
 // can't be used as open redirectors.
-const APP_SCHEME = /^(exp|exps|alohalive):\/\//;
+const APP_SCHEME = /^(exp|exps|aloha-circle|alohalive):\/\//;
 
 const target = (param) => {
   const uri = new URLSearchParams(window.location.search).get(param) ?? '';
@@ -39,10 +39,10 @@ function AppLogin() {
     }
   };
 
-  if (!ret) return <p className="error">Missing or invalid return link — open this page from the AlohaLive app.</p>;
+  if (!ret) return <p className="error">Missing or invalid return link — open this page from the Aloha Circle app.</p>;
   return (
     <>
-      <p>Sign in to AlohaLive with your Google account, then you'll be sent right back to the app.</p>
+      <p>Sign in to Aloha Circle with your Google account, then you'll be sent right back to the app.</p>
       <button className="cta" disabled={busy} onClick={signIn}>
         {busy ? 'Signing in…' : 'Continue with Google'}
       </button>
@@ -60,11 +60,11 @@ function AppReturn() {
     if (href) window.location.replace(href);
   }, [href]);
 
-  if (!href) return <p className="error">Missing or invalid return link — open this page from the AlohaLive app.</p>;
+  if (!href) return <p className="error">Missing or invalid return link — open this page from the Aloha Circle app.</p>;
   return (
     <>
       <p>{spin ? 'Mahalo for your donation! 🌺' : 'Taking you back…'}</p>
-      <a className="cta" href={href}>Return to the AlohaLive app</a>
+      <a className="cta" href={href}>Return to the Aloha Circle app</a>
     </>
   );
 }
@@ -74,7 +74,10 @@ export default function AppBridge() {
   return (
     <div className="page">
       <header>
-        <h1>Aloha<span className="accent">Live</span></h1>
+        <div className="brand-lockup">
+          <img className="brand-logo" src="/aloha-circle-logo.svg" alt="" />
+          <h1>Aloha <span className="accent">Circle</span></h1>
+        </div>
       </header>
       <div className="card">
         <h3>{login ? '🤙 Sign in' : '🎡 Back to the app'}</h3>
