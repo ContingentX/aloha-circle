@@ -14,11 +14,11 @@ import BoardingPassCard from './BoardingPass.jsx';
 import { styles } from './styles.js';
 
 // Both hosts are overridable at build time (EXPO_PUBLIC_* vars are inlined by
-// Expo); production builds set EXPO_PUBLIC_BRIDGE_BASE=https://alohalive.net
+// Expo); production builds set EXPO_PUBLIC_BRIDGE_BASE=https://aloha-circle.com
 // instead of relying on the dev site.
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'https://vsrvqrddll.execute-api.us-east-1.amazonaws.com';
 // The web app that hosts the sign-in and Stripe-return bridge pages.
-const BRIDGE_BASE = process.env.EXPO_PUBLIC_BRIDGE_BASE ?? 'https://dev.alohalive.net';
+const BRIDGE_BASE = process.env.EXPO_PUBLIC_BRIDGE_BASE ?? 'https://dev.aloha-circle.com';
 
 const INTERESTS = ['ocean', 'diving', 'hiking', 'wildlife', 'photography', 'farming', 'cooking', 'community'];
 

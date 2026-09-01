@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
-# Deploy AlohaLive site infrastructure for an environment
+# Deploy Aloha Circle site infrastructure for an environment
 # (S3 + CloudFront + ACM + Route53, template: infra/site.yaml).
 #   usage: ./infra/deploy.sh <dev|prod>
 set -euo pipefail
 
 ENV="${1:-}"
-# ALT_DOMAIN serves the same distribution under a second apex (empty = none).
+# Dev lives natively on dev.aloha-circle.com. The prod stack keeps the
+# DomainName/AltDomainName parameters it was created with (alohalive.net
+# primary + aloha-circle.com alt): swapping them would replace the Route53
+# records with each other's names and collide mid-update. CANONICAL instead
+# makes the CloudFront function 301 every other host — www variants and
+# alohalive.net alike — to aloha-circle.com, with zero cert/DNS churn.
 case "$ENV" in
-  dev)  DOMAIN="dev.alohalive.net"; CREATE_WWW="false"; ALT_DOMAIN="";                ALT_ZONE_ID="" ;;
-  prod) DOMAIN="alohalive.net";     CREATE_WWW="true";  ALT_DOMAIN="aloha-circle.com"; ALT_ZONE_ID="Z04064321OCFAQ8E2HIKK" ;;
+  dev)  DOMAIN="dev.aloha-circle.com"; ZONE_ID="Z04064321OCFAQ8E2HIKK"; CREATE_WWW="false"; ALT_DOMAIN="";                 ALT_ZONE_ID="";                     CANONICAL="" ;;
+  prod) DOMAIN="alohalive.net";        ZONE_ID="Z07263701EFGE2972ASGC"; CREATE_WWW="true";  ALT_DOMAIN="aloha-circle.com"; ALT_ZONE_ID="Z04064321OCFAQ8E2HIKK"; CANONICAL="aloha-circle.com" ;;
   *) echo "usage: $0 <dev|prod>" >&2; exit 1 ;;
 esac
 
 REGION="us-east-1"
-PROJECT="alohalive"
-HOSTED_ZONE_ID="Z07263701EFGE2972ASGC"
+PROJECT="alohalive"   # legacy resource namespace (stacks, buckets, table); renaming would replace live resources
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # The alt-domain pair must be set together (site.yaml's Rules enforce this at
@@ -34,9 +38,10 @@ aws cloudformation deploy \
     Environment="$ENV" \
     DomainName="$DOMAIN" \
     CreateWww="$CREATE_WWW" \
-    HostedZoneId="$HOSTED_ZONE_ID" \
+    HostedZoneId="$ZONE_ID" \
     AltDomainName="$ALT_DOMAIN" \
-    AltHostedZoneId="$ALT_ZONE_ID"
+    AltHostedZoneId="$ALT_ZONE_ID" \
+    CanonicalDomain="$CANONICAL"
 
 echo "==> [$ENV] Deploying donations API stack (alohalive-donations)"
 aws cloudformation deploy \

@@ -28,6 +28,16 @@ Parameters:
     Type: String
     Default: ""
     Description: Hosted zone id for AltDomainName. Required when AltDomainName is set.
+  CanonicalDomain:
+    Type: String
+    Default: ""
+    Description: >-
+      When set, the viewer-request function 301-redirects every other host on
+      the distribution (www variants and the legacy apex alike) to this domain.
+      Lets a stack keep its original DomainName/AltDomainName parameters — and
+      therefore its existing cert and Route53 records — while the site's
+      canonical identity moves to the other apex. Empty keeps the plain
+      www-to-apex behaviour. Requires CreateWww (the function only exists there).
 
 # The alt-domain parameters only work as a pair: the cert validation and the
 # Alt* Route53 records both need the zone id. Reject a half-specified pair at
@@ -113,8 +123,11 @@ Resources:
         SigningBehavior: always
         SigningProtocol: sigv4
 
-  # Redirects www.<host> to its own apex (301), for every domain on the
-  # distribution (alohalive.net and AltDomainName alike). Prod only.
+  # Host canonicalisation (301), prod only. Without CanonicalDomain: redirect
+  # www.<host> to its own apex, for every domain on the distribution. With
+  # CanonicalDomain: redirect EVERY other host (www variants and the legacy
+  # apex alike) to the canonical domain — how aloha-circle.com became the one
+  # true home while the stack keeps serving/redirecting alohalive.net.
   WwwToApexFunction:
     Type: AWS::CloudFront::Function
     Condition: WithWww
@@ -122,13 +135,17 @@ Resources:
       Name: !Sub "${ProjectName}-${Environment}-www-to-apex"
       AutoPublish: true
       FunctionConfig:
-        Comment: Redirect www to apex (301)
+        Comment: Redirect www + legacy hosts to the canonical apex (301)
         Runtime: cloudfront-js-2.0
-      FunctionCode: |
+      FunctionCode: !Sub |
         function handler(event) {
           var request = event.request;
           var host = request.headers.host.value;
-          if (host.indexOf('www.') === 0) {
+          var canonical = '${CanonicalDomain}';
+          var target = null;
+          if (canonical && host !== canonical) target = canonical;
+          else if (!canonical && host.indexOf('www.') === 0) target = host.slice(4);
+          if (target) {
             var qs = Object.keys(request.querystring).map(function (k) {
               return k + '=' + request.querystring[k].value;
             }).join('&');
@@ -136,7 +153,7 @@ Resources:
               statusCode: 301,
               statusDescription: 'Moved Permanently',
               headers: {
-                location: { value: 'https://' + host.slice(4) + request.uri + (qs ? '?' + qs : '') },
+                location: { value: 'https://' + target + request.uri + (qs ? '?' + qs : '') },
               },
             };
           }

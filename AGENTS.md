@@ -4,7 +4,7 @@
 
 - **Always open pull requests against `dev`.** Never target `production` or `main`, and never push directly to any long-lived branch.
 - **Promotion to production is manual and human-owned:** Seth opens the `dev` → `production` PR when dev is ready. Do not open, approve, or merge that PR yourself.
-- Deploys are automatic on merge: `dev` → dev.alohalive.net, `production` → alohalive.net (GitHub Actions, OIDC).
+- Deploys are automatic on merge: `dev` → dev.aloha-circle.com, `production` → aloha-circle.com (alohalive.net 301s to it) (GitHub Actions, OIDC).
 - Branch names: `feat/…`, `fix/…`, `docs/…`, `infra/…`. One concern per PR; PRs are Qodo-reviewed.
 
 ## Repo layout

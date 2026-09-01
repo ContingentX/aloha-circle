@@ -1,8 +1,8 @@
 {
   "expo": {
     "name": "Aloha Circle",
-    "slug": "alohalive",
-    "scheme": "alohalive",
+    "slug": "aloha-circle",
+    "scheme": ["aloha-circle", "alohalive"],
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -16,7 +16,7 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "net.alohalive.app",
+      "package": "com.alohacircle.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#fdf6ec"
