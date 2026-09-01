@@ -31,11 +31,12 @@ Resources:
       CorsConfiguration:
         CorsRules:
           - AllowedOrigins:
-              - https://alohalive.net
-              - https://www.alohalive.net
-              - https://dev.alohalive.net
               - https://aloha-circle.com
               - https://www.aloha-circle.com
+              - https://dev.aloha-circle.com
+              # Legacy prod origins until the alohalive.net 301 has been live a while.
+              - https://alohalive.net
+              - https://www.alohalive.net
               - http://localhost:5173
               - http://127.0.0.1:5173
             AllowedMethods: [PUT]
@@ -87,7 +88,11 @@ Resources:
                 Resource: "*"
                 Condition:
                   StringLike:
-                    ses:FromAddress: "*@alohalive.net"
+                    # Both domains are SES-verified; the legacy one stays until
+                    # the transition settles (a code rollback must still send).
+                    ses:FromAddress:
+                      - "*@aloha-circle.com"
+                      - "*@alohalive.net"
 
   DonationsFunction:
     Type: AWS::Lambda::Function
@@ -118,11 +123,12 @@ Resources:
       ProtocolType: HTTP
       CorsConfiguration:
         AllowOrigins:
-          - https://alohalive.net
-          - https://www.alohalive.net
-          - https://dev.alohalive.net
           - https://aloha-circle.com
           - https://www.aloha-circle.com
+          - https://dev.aloha-circle.com
+          # Legacy prod origins until the alohalive.net 301 has been live a while.
+          - https://alohalive.net
+          - https://www.alohalive.net
           - http://localhost:5173
           - http://127.0.0.1:5173
         AllowMethods: [GET, POST, OPTIONS]
