@@ -37,8 +37,8 @@ const CONFIG = {
     {
       id: 'grow', label: 'Give', still: STILLS[2], clip: DIVES[2],
       accent: '#1c7c54', eyebrow: 'Give a morning',
-      title: 'Causes are alive up here.',
-      body: 'Plant nursery trees for Lāhainā families, work a farm row, pack food boxes — every match comes with something you can do today.',
+      title: 'Welcome to the Ohana',
+      body: "You are a Voluntourist: plant trees for Lāhainā families, work a farm row, or pack food boxes before your won experience brings you together with a Maui resident. Share your conversations and ratings in Aloha Circle so locals and visitors can create a better Maui. Now we're family.",
       tags: ['Treecovery', 'Hua Momona Farms'],
       scroll: 1.5, linger: 0.4,
     },
