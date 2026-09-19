@@ -2,6 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import { findById, load, insert, counts, updateById } from './store.js';
 import { rankMatch } from './matcher.js';
+// Shared with the deployed Lambda API so kiʻi-memory tag derivation behaves
+// identically against the local demo store and the Dynamo-backed public API.
+import { deriveMemoryTags, memoryList } from '../../infra/donations/public-api-core.mjs';
 import { ingestOnce } from './ingest.js';
 import { handleMcpRequest, isLoopbackAddress } from './mcp.js';
 import { createPublicApiClient } from './public-api-client.js';
@@ -53,8 +56,18 @@ export function requireTrustedAgentOrigin(req, res, next) {
 }
 
 function createVisitorAndMatch(body = {}) {
-  const { name, interests } = body;
-  if (!name || !Array.isArray(interests) || interests.length === 0) return null;
+  const { name } = body;
+  const explicitInterests = Array.isArray(body.interests) ? body.interests : [];
+  const memories = memoryList(body.memories);
+  if (!name || (explicitInterests.length === 0 && memories.length === 0)) return null;
+  const derivedInterests = memories.length
+    ? deriveMemoryTags(memories, [
+        ...load('causes').flatMap((cause) => cause.causeTags ?? []),
+        ...load('locals').flatMap((local) => [...(local.interests ?? []), ...(local.causes ?? [])]),
+      ])
+    : [];
+  const interests = [...new Set([...explicitInterests, ...derivedInterests])];
+  if (interests.length === 0) return null;
   const visitor = insert('visitors', {
     name,
     interests,

@@ -124,6 +124,76 @@ export function toCauseSignal(record) {
   };
 }
 
+// --- Kiʻi memory → cause-tag derivation --------------------------------------
+// aloha-circle lets a signed-in user bring the memories of their conversations
+// with Kiʻi (aloha-intelligence.ai) instead of hand-picking interest chips.
+// Derivation is deterministic — no LLM: a memory carries a tag when the tag
+// itself, or one of its listed synonyms, appears as a whole word in the text.
+// Callers pass the tags the current locals/causes actually use as extra
+// vocabulary so derived tags always land inside the matcher's overlap space.
+
+export const MEMORY_TAG_SYNONYMS = {
+  ocean: ['sea', 'beach', 'beaches', 'shoreline', 'coast', 'coastal', 'marine'],
+  reef: ['reefs', 'coral', 'corals'],
+  diving: ['dive', 'divers', 'snorkel', 'snorkeling'],
+  hiking: ['hike', 'hikes'],
+  trails: ['trail'],
+  wildlife: [
+    'animal', 'animals', 'dog', 'dogs', 'cat', 'cats', 'shelter', 'bird',
+    'birds', 'whale', 'whales', 'turtle', 'turtles', 'seal', 'seals', 'humane',
+  ],
+  farming: [
+    'farm', 'farms', 'farmers', 'taro', 'kalo', 'agriculture', 'garden',
+    'gardens', 'aina', 'āina', 'ʻāina', 'watershed', 'replanting', 'restoration',
+  ],
+  cooking: ['cook', 'cooks'],
+  community: [
+    'ohana', 'ʻohana', 'kupuna', 'kūpuna', 'volunteer', 'volunteers',
+    'volunteering', 'clean-up', 'cleanup', 'cleanups',
+  ],
+  family: ['families', 'keiki'],
+  music: ['hula', 'mele'],
+  photography: ['photos', 'photographer', 'photograph'],
+  'food-security': ['hunger', 'meals', 'pantry', 'food'],
+};
+
+export const MEMORY_TEXT_MAX = 400;
+export const MEMORY_LIST_MAX = 30;
+
+export const memoryList = (value) => (Array.isArray(value) ? value : [])
+  .filter((memory) => typeof memory === 'string' && memory.trim())
+  .slice(0, MEMORY_LIST_MAX)
+  .map((memory) => memory.trim().slice(0, MEMORY_TEXT_MAX));
+
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const wholeWord = (word, text) =>
+  new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(word)}($|[^\\p{L}\\p{N}])`, 'u').test(text);
+
+export function deriveMemoryTags(memories, vocabulary = []) {
+  const texts = memoryList(memories).map((memory) => memory.toLowerCase());
+  if (texts.length === 0) return [];
+
+  // Not stringList: the vocabulary is every tag in play, not a 12-chip form.
+  const canonicalTags = new Map();
+  const vocabularyTags = (Array.isArray(vocabulary) ? vocabulary : [])
+    .filter((tag) => typeof tag === 'string')
+    .map((tag) => tag.trim().slice(0, 32))
+    .filter(Boolean);
+  for (const tag of [...Object.keys(MEMORY_TAG_SYNONYMS), ...vocabularyTags]) {
+    const key = tag.toLowerCase();
+    if (!canonicalTags.has(key)) canonicalTags.set(key, tag);
+  }
+
+  const hits = [];
+  for (const [key, tag] of canonicalTags) {
+    const words = [key, ...(MEMORY_TAG_SYNONYMS[key] ?? [])];
+    const count = texts.filter((text) => words.some((word) => wholeWord(word, text))).length;
+    if (count > 0) hits.push({ tag, count });
+  }
+  hits.sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+  return hits.slice(0, 12).map((hit) => hit.tag);
+}
+
 const overlap = (a = [], b = []) => {
   const setB = new Set(stringList(b).map((value) => value.toLowerCase()));
   return stringList(a).filter((value) => setB.has(value.toLowerCase()));

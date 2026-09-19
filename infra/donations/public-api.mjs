@@ -1,8 +1,10 @@
 import {
+  deriveMemoryTags,
   isPublicCause,
   isPublicNonprofit,
   isTrustedEndorsement,
   isTrustedLocal,
+  memoryList,
   parseJsonObject,
   rankMatch,
   toCauseSignal,
@@ -328,38 +330,80 @@ export function createPublicApi({ store }) {
     return result(200, body);
   }
 
+  // Tags every trusted record currently uses — the vocabulary kiʻi-memory
+  // derivation matches against, so derived tags stay inside the matcher's
+  // overlap space. Raw memory text is never stored, only the derived tags.
+  const matchVocabulary = (locals, causeRecords) => [
+    ...causeRecords.filter(isPublicCause).flatMap((record) =>
+      Array.isArray(record.causeTags) ? record.causeTags : []),
+    ...locals.filter(isTrustedLocal).flatMap((record) => [
+      ...(Array.isArray(record.interests) ? record.interests : []),
+      ...(Array.isArray(record.causes) ? record.causes : []),
+    ]),
+  ];
+
   async function createVisitor(body) {
     const name = str(body.name, 80);
-    const interests = tags(body.interests);
-    if (!name || interests.length === 0) return result(400, { error: 'name and interests[] are required' });
+    const explicitInterests = tags(body.interests);
+    const memories = memoryList(body.memories);
+    if (!name || (explicitInterests.length === 0 && memories.length === 0)) {
+      return result(400, { error: 'name and interests[] are required' });
+    }
+    const [locals, causeRecords, endorsements] = await Promise.all([
+      store.list('LOCAL'), store.list('CAUSE'), store.list('ENDORSE'),
+    ]);
+    const derivedInterests = memories.length
+      ? deriveMemoryTags(memories, matchVocabulary(locals, causeRecords))
+      : [];
+    const interests = tags([...explicitInterests, ...derivedInterests]);
+    if (interests.length === 0) {
+      return result(422, {
+        error: 'no matchable causes found in those kiʻi memories yet — pick interests by hand',
+      });
+    }
     const visitor = await store.put('VISITOR', {
       name,
       interests,
+      interestSource: memories.length ? 'kii-memories' : 'form',
       availability: optionalStr(body.availability, 80),
       groupType: optionalStr(body.groupType, 40),
       desiredInvolvement: optionalStr(body.desiredInvolvement, 80),
     }, { ttlDays: 30 });
-    const [locals, causeRecords, endorsements] = await Promise.all([
-      store.list('LOCAL'), store.list('CAUSE'), store.list('ENDORSE'),
-    ]);
     const ranked = rankMatch(visitor, { locals, causes: causeRecords, endorsements });
     const match = ranked ? await store.put('MATCH', ranked, { ttlDays: 30 }) : null;
-    return result(201, { visitor, match });
+    return result(201, { visitor, match, derivedInterests });
   }
 
   async function createLocal(body) {
     const name = str(body.name, 80);
-    const interests = tags(body.interests);
-    if (!name || interests.length === 0) return result(400, { error: 'name and interests[] are required' });
+    const explicitInterests = tags(body.interests);
+    const memories = memoryList(body.memories);
+    if (!name || (explicitInterests.length === 0 && memories.length === 0)) {
+      return result(400, { error: 'name and interests[] are required' });
+    }
+    let derivedInterests = [];
+    if (memories.length) {
+      const [locals, causeRecords] = await Promise.all([
+        store.list('LOCAL'), store.list('CAUSE'),
+      ]);
+      derivedInterests = deriveMemoryTags(memories, matchVocabulary(locals, causeRecords));
+    }
+    const interests = tags([...explicitInterests, ...derivedInterests]);
+    if (interests.length === 0) {
+      return result(422, {
+        error: 'no matchable causes found in those kiʻi memories yet — pick interests by hand',
+      });
+    }
     const local = await store.put('LOCAL', {
       name,
       interests,
-      causes: tags(body.causes),
+      causes: tags([...tags(body.causes), ...derivedInterests]),
+      interestSource: memories.length ? 'kii-memories' : 'form',
       town: optionalStr(body.town, 80),
       status: 'pending',
       verified: false,
     }, { ttlDays: 180 });
-    return result(201, local);
+    return result(201, { ...local, derivedInterests });
   }
 
   async function createNonprofit(body, clientKey) {
