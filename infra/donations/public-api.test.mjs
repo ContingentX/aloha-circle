@@ -434,3 +434,50 @@ test('public route parser reports malformed JSON as a 400-class public API error
     (error) => error instanceof PublicApiError && error.status === 400,
   );
 });
+
+test('visitors and locals can bring kiʻi memories: tags derived, raw text never stored', async () => {
+  const store = memoryStore({
+    LOCAL: [trustedLocal],
+    CAUSE: [trustedCause],
+    ENDORSE: [trustedEndorsement],
+  });
+  const api = createPublicApi({ store });
+  const memories = [
+    'User cares deeply about beach clean-up walks with shelter dogs.',
+  ];
+
+  const visitorResponse = await api.handle({
+    method: 'POST', path: '/api/visitors',
+    rawBody: JSON.stringify({ name: 'Kai', memories }),
+  });
+  assert.equal(visitorResponse.statusCode, 201);
+  assert.ok(visitorResponse.body.derivedInterests.includes('ocean'), 'beach → ocean');
+  assert.ok(visitorResponse.body.visitor.interests.includes('ocean'));
+  assert.equal(visitorResponse.body.visitor.interestSource, 'kii-memories');
+  assert.ok(visitorResponse.body.match, 'derived ocean interest matches the trusted local');
+
+  const localResponse = await api.handle({
+    method: 'POST', path: '/api/locals',
+    rawBody: JSON.stringify({ name: 'Leilani', memories }),
+  });
+  assert.equal(localResponse.statusCode, 201);
+  assert.equal(localResponse.body.status, 'pending');
+  assert.ok(localResponse.body.causes.includes('ocean'));
+
+  assert.equal(JSON.stringify(store.writes).includes('shelter dogs'), false,
+    'raw kiʻi memory text must never be persisted');
+});
+
+test('kiʻi memories with no matchable causes are rejected without writes', async () => {
+  const store = memoryStore({ LOCAL: [trustedLocal], CAUSE: [trustedCause] });
+  const api = createPublicApi({ store });
+  const response = await api.handle({
+    method: 'POST', path: '/api/visitors',
+    rawBody: JSON.stringify({ name: 'Kai', memories: ['nothing relatable in here'] }),
+  });
+  assert.equal(response.statusCode, 422);
+  assert.equal(store.writes.length, 0);
+  assert.equal((await api.handle({
+    method: 'POST', path: '/api/visitors', rawBody: JSON.stringify({ name: 'Kai' }),
+  })).statusCode, 400, 'no interests and no memories keeps the original contract');
+});
