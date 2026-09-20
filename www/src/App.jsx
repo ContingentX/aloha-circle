@@ -6,10 +6,10 @@ import { DonationWheel, ExperienceManager } from './Wheel.jsx';
 import { LiveStrip, CauseScroller } from './Causes.jsx';
 import { World } from './World.jsx';
 import { AlohaCircle } from './AlohaCircle.jsx';
+import { KiiMatch, MatchCard } from './KiiMatch.jsx';
 import { FEATURED_NONPROFITS } from './nonprofits.js';
 
 const TRUEFORGE_DEMO_ENABLED = import.meta.env.VITE_TRUEFORGE_DEMO === 'true';
-const AGENT_CONSOLE_URL = import.meta.env.VITE_AGENT_CONSOLE_URL ?? '/agent-console';
 
 const INTEREST_OPTIONS = [
   'ocean', 'diving', 'hiking', 'wildlife', 'photography', 'farming',
@@ -29,26 +29,6 @@ function InterestPicker({ selected, onToggle }) {
           {tag}
         </button>
       ))}
-    </div>
-  );
-}
-
-function MatchCard({ match, agent }) {
-  return (
-    <div className="card match-card">
-      <h3>🌊 Your Maui Match</h3>
-      <p><strong>Meet:</strong> {match.localName}, {match.localTown}</p>
-      <p><strong>Cause:</strong> {match.cause}</p>
-      <p><strong>Why:</strong> {match.why}</p>
-      <p><strong>Today:</strong> {match.suggestedAction}</p>
-      {agent && (
-        <div className="agent-receipt">
-          <p><strong>Named TrueForge agent:</strong> <code>{agent.name}</code></p>
-          <p><strong>Aloha Agent:</strong> {agent.pendingApprovals?.length ? 'Waiting for human approval' : agent.status}</p>
-          <p>{agent.eventCount} TrueForge events · session <code>{agent.trueforgeSessionId}</code></p>
-          <a href={AGENT_CONSOLE_URL} target="_blank" rel="noreferrer">Open the TrueForge operator view ↗</a>
-        </div>
-      )}
     </div>
   );
 }
@@ -383,6 +363,7 @@ export default function App() {
           <CauseScroller />
           <main>
             <DonationWheel />
+            <KiiMatch />
             <VisitorTab />
           </main>
         </>

@@ -295,7 +295,10 @@ function mountScrollWorld(container, config) {
       else cop = (before || after) ? 0 : smooth(Math.min(1, pr / 0.28, (1 - pr) / 0.28));
       const c = copies[i];
       c.style.opacity = cop;
-      c.style.transform = reduce ? 'none' : `translateY(${(0.5 - pr) * 4}vh)`;
+      // No vertical drift on phones: the CSS anchors copy to the bottom of the
+      // frame (where the gradient lightens the scene) and it must stay pinned
+      // there — an inline transform would override that stylesheet anchor.
+      c.style.transform = (reduce || isMobile()) ? 'none' : `translateY(${(0.5 - pr) * 4}vh)`;
       c.style.pointerEvents = cop > 0.5 ? 'auto' : 'none';
     }
 
@@ -500,6 +503,14 @@ function injectCSS() {
     .sw-copy{bottom:calc(clamp(56px,12dvh,110px) + env(safe-area-inset-bottom));}
     .sw-copy__title{font-size:clamp(1.9rem,7.5vw,2.7rem);}
     .sw-copy__body{max-width:none;font-size:clamp(.98rem,3.6vw,1.1rem);} .sw-scene__video,.sw-scene__still{object-position:center 46%;}
+    /* Phone readability: no tag chips, and a 1px white stroke around the copy
+       (8-direction text-shadow — a real text-stroke erodes dark glyphs) so it
+       stays legible when the scene behind the gradient is busy. */
+    .sw-copy__tags{display:none;}
+    .sw-copy__title,.sw-copy__body,.sw-copy__eyebrow,.sw-copy__num{text-shadow:
+      -1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff,
+      -1px 0 0 #fff,1px 0 0 #fff,0 -1px 0 #fff,0 1px 0 #fff,
+      0 2px 16px color-mix(in srgb,var(--sw-bg) 85%,transparent);}
     .sw-hint{bottom:calc(20px + env(safe-area-inset-bottom));}
     .sw-route{gap:16px;right:6px;} .sw-route__label{display:none;}
   }

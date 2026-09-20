@@ -3,7 +3,10 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   MAX_REQUEST_BYTES,
+  MEMORY_LIST_MAX,
+  MEMORY_TEXT_MAX,
   PublicApiError,
+  deriveMemoryTags,
   isPublicNonprofit,
   isTrustedEndorsement,
   parseJsonObject,
@@ -182,4 +185,54 @@ test('rankMatch emits the cause id and source evidence required by the Match con
   assert.equal(match.blocks[1].sourceUrl, 'https://example.test/reef');
   assert.equal(match.blocks[1].fetchedAt, '2026-08-29T00:00:00.000Z');
   assert.equal(match.scoreReceipt.total, match.score);
+});
+
+test('deriveMemoryTags maps kiʻi memory text onto canonical tags via whole-word synonyms', () => {
+  const memories = [
+    'User cares deeply about the Coral Reef Alliance and their watershed restoration work.',
+    'Another cause close to my heart is the Maui Humane Society and their beach clean-up walks with shelter dogs.',
+  ];
+  const derived = deriveMemoryTags(memories);
+  assert.ok(derived.includes('reef'), 'coral → reef');
+  assert.ok(derived.includes('ocean'), 'beach → ocean');
+  assert.ok(derived.includes('wildlife'), 'shelter dogs → wildlife');
+  assert.ok(derived.includes('farming'), 'watershed restoration → farming');
+  assert.ok(!derived.includes('cooking'), 'no cooking words present');
+});
+
+test('deriveMemoryTags requires whole words, ranks by hit count, and stays deterministic', () => {
+  assert.deepEqual(deriveMemoryTags(['a new season of reasons']), [],
+    'season must not match sea');
+  const derived = deriveMemoryTags([
+    'the reef needs help', 'reef divers wanted', 'one hike this weekend',
+  ]);
+  assert.deepEqual(derived[0], 'reef', 'two reef memories outrank one hiking memory');
+  assert.deepEqual(derived, deriveMemoryTags([
+    'one hike this weekend', 'reef divers wanted', 'the reef needs help',
+  ]), 'memory order must not change the result');
+});
+
+test('deriveMemoryTags matches record vocabulary beyond the built-in synonym map, uncapped', () => {
+  const vocabulary = [
+    't01', 't02', 't03', 't04', 't05', 't06', 't07', 't08', 't09', 't10',
+    't11', 't12', 'food-security', 'Lahaina-rebuild',
+  ];
+  const derived = deriveMemoryTags(
+    ['I volunteer for the lahaina-rebuild effort and a food-security pantry.'],
+    vocabulary,
+  );
+  assert.ok(derived.includes('Lahaina-rebuild'), 'vocabulary entry 14 still matches');
+  assert.ok(derived.includes('food-security'));
+});
+
+test('deriveMemoryTags bounds its input and ignores non-string memories', () => {
+  assert.deepEqual(deriveMemoryTags(['', '   ', 42, null, {}]), []);
+  assert.deepEqual(deriveMemoryTags('reef'), []);
+  const farAway = `${'x '.repeat(MEMORY_TEXT_MAX)}reef`;
+  assert.deepEqual(deriveMemoryTags([farAway]), [],
+    'text beyond the per-memory cap is not scanned');
+  const beyondList = Array.from({ length: MEMORY_LIST_MAX + 5 }, (_, index) =>
+    index < MEMORY_LIST_MAX ? 'nothing here' : 'reef');
+  assert.deepEqual(deriveMemoryTags(beyondList), [],
+    'memories beyond the list cap are not scanned');
 });
