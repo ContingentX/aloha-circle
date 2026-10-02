@@ -64,3 +64,38 @@ test('saveRecordingAndUpload stores video + metadata locally without VAST env', 
   assert.equal(sidecar.sessionId, 'deadbeef');
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('vssSyncBodyFromEnv builds the batch-sync/start schema with read-only source creds', () => {
+  const { vssSyncBodyFromEnv } = require('../src/vastUpload.cjs');
+  assert.equal(vssSyncBodyFromEnv({}), null); // no VAST config -> nothing to sync
+  const env = {
+    VAST_S3_ENDPOINT: 'https://s3.us-east-1.amazonaws.com',
+    VAST_S3_BUCKET: 'relay-bucket',
+    VAST_S3_ACCESS_KEY: 'WRITEKEY',
+    VAST_S3_SECRET_KEY: 'WRITESECRET',
+    VAST_S3_PREFIX: 'media/vss-backfill/',
+    VSS_SOURCE_ACCESS_KEY: 'READKEY',
+    VSS_SOURCE_SECRET_KEY: 'READSECRET',
+  };
+  assert.deepEqual(vssSyncBodyFromEnv(env), {
+    source_s3_endpoint: 'https://s3.us-east-1.amazonaws.com',
+    source_access_key: 'READKEY',
+    source_secret_key: 'READSECRET',
+    source_bucket: 'relay-bucket',
+    source_prefix: 'media/vss-backfill/',
+  });
+  // Without a dedicated read-only pair, the write pair is reused.
+  delete env.VSS_SOURCE_ACCESS_KEY;
+  delete env.VSS_SOURCE_SECRET_KEY;
+  assert.equal(vssSyncBodyFromEnv(env).source_access_key, 'WRITEKEY');
+});
+
+test('transcodeToMp4 falls back to null on an invalid source', () => {
+  const { transcodeToMp4 } = require('../src/recordings.cjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aloha-tc-'));
+  const bad = path.join(dir, 'not-video.webm');
+  fs.writeFileSync(bad, 'not a video');
+  assert.equal(transcodeToMp4(bad), null);
+  assert.equal(fs.existsSync(path.join(dir, 'not-video.mp4')), false);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

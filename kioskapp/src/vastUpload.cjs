@@ -76,7 +76,7 @@ async function uploadToVast(filePath, key, cfg) {
       Authorization: authorization,
       'x-amz-content-sha256': payloadHash,
       'x-amz-date': amzDate,
-      'Content-Type': 'video/webm',
+      'Content-Type': key.endsWith('.mp4') ? 'video/mp4' : 'video/webm',
     },
     body,
   });
@@ -84,12 +84,30 @@ async function uploadToVast(filePath, key, cfg) {
   return url.toString();
 }
 
+// Build the batch-sync/start request body. /start wants source_* fields (the
+// prefill endpoint returns s3_*-named fields that /start 422s on — verified
+// live against team-18-vss.thecosmoslabs.com). The source creds handed to the
+// VSS server may be a separate read-only pair (VSS_SOURCE_*) so the kiosk's
+// write credentials never leave the machine.
+function vssSyncBodyFromEnv(env) {
+  const cfg = vastConfigFromEnv(env);
+  if (!cfg) return null;
+  return {
+    source_s3_endpoint: cfg.endpoint,
+    source_access_key: env.VSS_SOURCE_ACCESS_KEY || cfg.accessKey,
+    source_secret_key: env.VSS_SOURCE_SECRET_KEY || cfg.secretKey,
+    source_bucket: cfg.bucket,
+    source_prefix: cfg.prefix,
+  };
+}
+
 // Best-effort: log in to the VSS blueprint and kick a batch-sync so the new
 // object shows up in /search. Returns false (never throws) when VSS_* env is
 // missing or any call fails — the upload itself has already succeeded.
 async function triggerVssSync(env) {
   const base = env.VSS_URL && env.VSS_URL.replace(/\/+$/, '');
-  if (!base || !env.VSS_USERNAME || !env.VSS_PASSWORD) return false;
+  const body = vssSyncBodyFromEnv(env);
+  if (!base || !env.VSS_USERNAME || !env.VSS_PASSWORD || !body) return false;
   try {
     const login = await fetch(`${base}/api/v1/auth/login`, {
       method: 'POST',
@@ -98,13 +116,10 @@ async function triggerVssSync(env) {
     });
     if (!login.ok) throw new Error(`login ${login.status}`);
     const { access_token } = await login.json();
-    const auth = { Authorization: `Bearer ${access_token}` };
-    const prefill = await fetch(`${base}/api/v1/batch-sync/prefill`, { headers: auth });
-    const config = prefill.ok ? await prefill.json() : {};
     const start = await fetch(`${base}/api/v1/batch-sync/start`, {
       method: 'POST',
-      headers: { ...auth, 'Content-Type': 'application/json' },
-      body: JSON.stringify(config),
+      headers: { Authorization: `Bearer ${access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
     });
     if (!start.ok) throw new Error(`batch-sync/start ${start.status}`);
     return true;
@@ -114,4 +129,4 @@ async function triggerVssSync(env) {
   }
 }
 
-module.exports = { vastConfigFromEnv, signV4Put, uploadToVast, triggerVssSync };
+module.exports = { vastConfigFromEnv, vssSyncBodyFromEnv, signV4Put, uploadToVast, triggerVssSync };
