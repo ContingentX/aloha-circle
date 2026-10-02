@@ -49,6 +49,10 @@ export function initAdminMode(doc = document, mode = createAdminMode()) {
 
   doc.addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    // Typing in a form field (e.g. the claim email) must not arm the sequence
+    // — "maloha@…" contains "aloha".
+    const tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
     if (mode.key(e.key)) sync();
   });
   sw.addEventListener('change', () => {

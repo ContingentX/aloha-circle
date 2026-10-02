@@ -301,3 +301,166 @@ button.ghost {
   font-size: 1.6vh;
   letter-spacing: 0.04em;
 }
+
+/* ---- Wheel of Aloha -------------------------------------------------------- */
+#wheel-area {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -52%);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1vh;
+}
+#wheel-pointer {
+  font-size: 4vh;
+  color: #e9fbff;
+  text-shadow: 0 0 1.2vh rgba(4, 36, 58, 0.9);
+  margin-bottom: -1.6vh;
+  z-index: 1;
+}
+#wheel-svg {
+  width: 52vh;
+  height: 52vh;
+  filter: drop-shadow(0 0 2.4vh rgba(4, 36, 58, 0.75));
+  transition: filter 0.3s;
+}
+#wheel-area.grabbed #wheel-svg {
+  filter: drop-shadow(0 0 3vh rgba(55, 195, 184, 0.95));
+}
+#wheel-svg .wheel-label {
+  fill: #e9fbff;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  paint-order: stroke;
+  stroke: rgba(4, 36, 58, 0.55);
+  stroke-width: 3px;
+}
+#wheel-svg .wheel-hub {
+  font-size: 26px;
+}
+#wheel-hint {
+  padding: 1vh 2.4vw;
+  border-radius: 999px;
+  background: rgba(4, 36, 58, 0.75);
+  border: 1px solid rgba(233, 251, 255, 0.25);
+  font-size: 2.4vh;
+  min-height: 3.2vh;
+}
+
+/* ---- Aloha match card ------------------------------------------------------- */
+#match-card {
+  position: absolute;
+  top: 52%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  width: min(64vh, 86vw);
+  max-height: 74vh;
+  padding: 2vh 2.5vw;
+  border-radius: 2.4vh;
+  background: rgba(4, 36, 58, 0.88);
+  border: 1px solid rgba(233, 251, 255, 0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.2vh;
+  text-align: center;
+}
+#match-photo-wrap {
+  position: relative;
+  width: 13vh;
+  height: 13vh;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 0.5vh solid rgba(55, 195, 184, 0.85);
+  background: rgba(55, 195, 184, 0.25);
+}
+#match-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+}
+#match-initial {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 6vh;
+  font-weight: 700;
+  color: #e9fbff;
+}
+#match-card h2 {
+  margin: 0;
+  font-size: 3.2vh;
+}
+#match-blurb {
+  margin: 0;
+  font-size: 2.2vh;
+  opacity: 0.9;
+}
+#match-reasons {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 2vh;
+  color: #37c3b8;
+}
+#match-reasons li::before {
+  content: "\2713  ";
+}
+#match-prize {
+  font-size: 2.6vh;
+  font-weight: 600;
+  color: #ffd166;
+}
+#claim-form {
+  display: flex;
+  gap: 0.8vw;
+}
+#claim-email {
+  padding: 1.2vh 1.4vw;
+  border-radius: 1vh;
+  border: 1px solid rgba(233, 251, 255, 0.4);
+  background: rgba(233, 251, 255, 0.12);
+  color: #e9fbff;
+  font-size: 2.2vh;
+  width: 26vw;
+}
+#claim-btn {
+  padding: 1.2vh 1.8vw;
+  border-radius: 1vh;
+  border: none;
+  background: #37c3b8;
+  color: #04243a;
+  font-size: 2.2vh;
+  font-weight: 600;
+  cursor: pointer;
+}
+#claim-qr-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6vh;
+}
+#claim-qr {
+  border-radius: 1vh;
+  background: #fff;
+  padding: 0.6vh;
+}
+#claim-qr-hint {
+  font-size: 1.8vh;
+  opacity: 0.8;
+}
+#claim-done {
+  font-size: 2.4vh;
+  color: #37c3b8;
+  font-weight: 600;
+}

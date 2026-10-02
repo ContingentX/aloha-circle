@@ -13,11 +13,20 @@ test('parseBrandReport reads fenced JSON and normalizes snake_case', () => {
   const report = parseBrandReport('```json\n{"person":true,"brands":["NVIDIA"],"clothing_style":["aloha shirt"],"colors":["teal"],"accessories":["lei"]}\n```');
   assert.deepEqual(report, {
     person: true,
+    gender: 'unknown',
     brands: ['NVIDIA'],
     clothingStyle: ['aloha shirt'],
     colors: ['teal'],
     accessories: ['lei'],
   });
+});
+
+test('parseBrandReport normalizes gender for the matcher gate', () => {
+  assert.equal(parseBrandReport('{"person":true,"gender":"Female"}').gender, 'female');
+  assert.equal(parseBrandReport('{"person":true,"gender":"MALE"}').gender, 'male');
+  // Anything else stays unknown — unknown matches every local downstream.
+  assert.equal(parseBrandReport('{"person":true,"gender":"androgynous"}').gender, 'unknown');
+  assert.equal(parseBrandReport('{"person":true}').gender, 'unknown');
 });
 
 test('parseBrandReport returns no-person and rejects junk', () => {

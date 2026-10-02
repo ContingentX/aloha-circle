@@ -76,6 +76,25 @@ export const STAGES = [
     button: 'Next',
   },
   {
+    id: 'wheel',
+    kind: 'wheel',
+    emoji: '\u{1F3A1}',
+    title: 'The Wheel of Aloha',
+    instruction:
+      'You completed the ritual! Reach up, grab the wheel at the top, and pull down to spin — win an experience to share with your aloha match.',
+    detect: 'wheel_spin',
+    button: 'Spin',
+  },
+  {
+    id: 'match',
+    kind: 'match',
+    emoji: '\u{1F91D}',
+    title: 'Your Aloha Match',
+    instruction:
+      'A local who shares your style will enjoy this experience with you. Enter your email or snap the QR code to claim it.',
+    button: 'Mahalo',
+  },
+  {
     id: 'mahalo',
     kind: 'closing',
     title: 'Mahalo nui loa',

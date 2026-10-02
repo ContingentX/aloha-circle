@@ -157,6 +157,7 @@ export function createPoseDetector() {
             type: 'pose',
             face: classified.face,
             person: classified.person,
+            keypoints: classified.keypoints,
             video,
             event: classified.event || null,
           });

@@ -25,6 +25,32 @@
       <div id="avatar-name">Kanaloa</div>
     </div>
 
+    <div id="wheel-area" class="hidden">
+      <div id="wheel-pointer">&#9660;</div>
+      <svg id="wheel-svg" viewBox="0 0 400 400"></svg>
+      <div id="wheel-hint">Reach up &#8593; grab the top of the wheel, then pull down fast!</div>
+    </div>
+
+    <div id="match-card" class="hidden">
+      <div id="match-photo-wrap">
+        <img id="match-photo" alt="" />
+        <div id="match-initial"></div>
+      </div>
+      <h2 id="match-name"></h2>
+      <p id="match-blurb"></p>
+      <ul id="match-reasons"></ul>
+      <div id="match-prize"></div>
+      <form id="claim-form">
+        <input id="claim-email" type="email" placeholder="your@email.com" autocomplete="off" />
+        <button id="claim-btn" type="submit">Email my prize</button>
+      </form>
+      <div id="claim-qr-wrap">
+        <div id="claim-qr"></div>
+        <div id="claim-qr-hint">or snap this code to claim</div>
+      </div>
+      <div id="claim-done" class="hidden"></div>
+    </div>
+
     <div id="hold-ring" class="hidden">
       <svg viewBox="0 0 120 120">
         <circle class="ring-bg" cx="60" cy="60" r="52" />
@@ -68,6 +94,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter@4.22.0/dist/tf-converter.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.22.0/dist/tf-backend-webgl.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3/dist/pose-detection.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs@0.0.2/qrcode.min.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

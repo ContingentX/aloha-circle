@@ -21,7 +21,8 @@ const TIMEOUT_MS = Number(process.env.BRAND_TIMEOUT_MS) || 15000;
 const BRAND_PROMPT = [
   'Look at the person in this image.',
   'Reply with ONLY a JSON object — no prose, no markdown fences — shaped exactly like:',
-  '{"person":true,"brands":[],"clothing_style":[],"colors":[],"accessories":[]}',
+  '{"person":true,"gender":"unknown","brands":[],"clothing_style":[],"colors":[],"accessories":[]}',
+  'gender: your best read of the person’s presented gender — "female", "male", or "unknown" if unsure.',
   'brands: brand names whose logo or lettering is clearly legible (empty if none).',
   'clothing_style: up to 3 short style descriptors (e.g. "aloha shirt", "athleisure").',
   'colors: dominant clothing colors.',
@@ -59,8 +60,10 @@ function parseBrandReport(text) {
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
   if (parsed.person === false) return { person: false };
+  const gender = String(parsed.gender || '').trim().toLowerCase();
   return {
     person: true,
+    gender: gender === 'female' || gender === 'male' ? gender : 'unknown',
     brands: toList(parsed.brands),
     clothingStyle: toList(parsed.clothing_style ?? parsed.clothingStyle),
     colors: toList(parsed.colors),
