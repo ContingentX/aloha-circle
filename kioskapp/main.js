@@ -9,10 +9,15 @@ const { queueRecap } = require('./src/recap.cjs');
 
 const KIOSK = process.argv.includes('--kiosk');
 
+
 function createWindow() {
+  // KIOSK_REC=1: frameless window pinned at (40,40) so ffmpeg gdigrab can
+  // capture an exact client rect for the explainer-video takes (local-only).
+  const REC = process.env.KIOSK_REC === '1';
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
+    ...(REC ? { x: 40, y: 40, frame: false, resizable: false, alwaysOnTop: true } : {}),
     fullscreen: KIOSK,
     kiosk: KIOSK,
     autoHideMenuBar: true,
@@ -23,7 +28,10 @@ function createWindow() {
     },
   });
   // Dev: KIOSK_STAGE=honi starts on a specific stage.
-  const query = process.env.KIOSK_STAGE ? { stage: process.env.KIOSK_STAGE } : undefined;
+  // KIOSK_FAKE_CAM=<media url>: renderer substitutes this for the webcam feed.
+  const query = {};
+  if (process.env.KIOSK_STAGE) query.stage = process.env.KIOSK_STAGE;
+  if (process.env.KIOSK_FAKE_CAM) query.fakecam = process.env.KIOSK_FAKE_CAM;
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'), { query });
 
   // Smoke-test hook: KIOSK_SHOT=/path/out.png captures the window and quits.
