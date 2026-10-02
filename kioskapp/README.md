@@ -49,6 +49,31 @@ export COREWEAVE_API_KEY=$(aws ssm get-parameter \
 
 Without the key the kiosk uses canned fallback lines.
 
+## Session recordings (VAST / team-18 VSS)
+
+Each completed ritual (visitor reached Mahalo) is recorded from the camera and
+saved to `recordings/` as `aloha-<stamp>-<sessionId>.webm` plus a `.json`
+sidecar (stage timeline). Abandoned sessions are discarded.
+
+With the team-18 VAST credentials exported, recordings also upload to the VAST
+object store and trigger a VSS batch-sync so they appear at
+<https://team-18-vss.thecosmoslabs.com/search>:
+
+```bash
+export VAST_S3_ENDPOINT=…   # S3-compatible endpoint from the lab VM
+export VAST_S3_BUCKET=…
+export VAST_S3_ACCESS_KEY=…
+export VAST_S3_SECRET_KEY=…
+# optional: VAST_S3_REGION (default us-east-1), VAST_S3_PREFIX (default aloha-sessions/)
+
+export VSS_URL=https://team-18-vss.thecosmoslabs.com
+export VSS_USERNAME=…       # VSS blueprint login
+export VSS_PASSWORD=…
+```
+
+Without the env vars the kiosk keeps local copies only — nothing is lost, and
+the upload path (`src/vastUpload.cjs`, dependency-free SigV4) is unit-tested.
+
 ## Pose detection
 
 Live in `renderer/pose.js` (MoveNet Lightning via TF.js) with deterministic

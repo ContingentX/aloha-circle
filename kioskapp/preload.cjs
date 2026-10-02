@@ -4,4 +4,5 @@ contextBridge.exposeInMainWorld('kiosk', {
   askReasoner: (prompt) => ipcRenderer.invoke('reasoning:ask', prompt),
   judgeGesture: (imageDataUrl, prompt) =>
     ipcRenderer.invoke('cosmos:judge', imageDataUrl, prompt),
+  saveRecording: (buffer, meta) => ipcRenderer.invoke('recording:save', buffer, meta),
 });

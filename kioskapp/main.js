@@ -2,6 +2,7 @@ const { app, BrowserWindow, session, ipcMain } = require('electron');
 const path = require('path');
 const { askReasoner } = require('./src/reasoning.cjs');
 const { judgeGesture } = require('./src/cosmos.cjs');
+const { saveRecordingAndUpload } = require('./src/recordings.cjs');
 
 const KIOSK = process.argv.includes('--kiosk');
 
@@ -52,6 +53,11 @@ app.whenReady().then(() => {
   ipcMain.handle('reasoning:ask', (_e, prompt) => askReasoner(prompt));
   ipcMain.handle('cosmos:judge', (_e, imageDataUrl, prompt) =>
     judgeGesture(imageDataUrl, prompt)
+  );
+  // Completed ritual recordings: saved locally, uploaded to the team-18 VAST
+  // bucket + VSS search when VAST_S3_* / VSS_* env vars are set.
+  ipcMain.handle('recording:save', (_e, buffer, meta) =>
+    saveRecordingAndUpload(Buffer.from(buffer), meta)
   );
 
   createWindow();
