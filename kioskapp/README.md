@@ -1,0 +1,65 @@
+# Aloha Circle kiosk app
+
+Electron app for the screens at the Aloha Circle in Maui. It runs **The Breath
+of Aloha** — a guided sensory ritual led by **Kanaloa**, a Hawaiian girl avatar
+made of ocean water (rendered with [Masky](https://masky.ai)), over a live
+camera view of the visitor.
+
+## Ritual flow
+
+1. **Attract / Begin** — camera preview, big Begin button.
+2. **Welcome** — Kanaloa introduces herself ("Aloha from my heart to your
+   heart, stranger, my name is Kanaloa") and explains the experience.
+3. **Honi Ihu** — forehead-to-forehead greeting of breath: hold for 5 seconds
+   (breath ring countdown). MVP simulates the touch with a button; pose
+   detection will trigger it (see `renderer/pose.js`).
+4. **The Eyes** 👁️ — bless your eyes to see beauty and compassion.
+5. **The Ears** 👂 — intend to listen, tune into inner wisdom.
+6. **The Nose** 👃 — the hā, breath of life: inhale goodness, release the rest.
+7. **The Heart** ❤️ — hands stacked on chest: "from my heart to your heart."
+8. **Mahalo** — closing blessing, start over.
+
+Every stage shows Kanaloa's pre-rendered speak clip in a floating card over the
+camera feed; visitors hear her through the provided headphones.
+
+## Run it
+
+```bash
+cd kioskapp
+npm install
+npm run fetch-media   # pulls Kanaloa's clips from aloha-circle.com/media/kiosk
+npm start             # windowed dev mode
+npm run kiosk         # fullscreen kiosk mode
+```
+
+Without `fetch-media` the app still works — clips stream from the media bucket.
+
+## Optional reasoning (CoreWeave)
+
+`src/reasoning.cjs` calls W&B Inference on CoreWeave for in-experience
+reasoning (personalized blessings, adaptive coaching). Export the key first —
+it lives in SSM at `/alohaintelligence/production/coreweave_api_key` and is
+never committed:
+
+```bash
+export COREWEAVE_API_KEY=$(aws ssm get-parameter \
+  --name /alohaintelligence/production/coreweave_api_key \
+  --with-decryption --query Parameter.Value --output text)
+```
+
+Without the key the kiosk uses canned fallback lines.
+
+## Pose detection
+
+Stubbed in `renderer/pose.js`, which documents the full RF-DETR Keypoint /
+Roboflow Inference plan (per the NVIDIA team's recommendation) and the gesture
+predicates for each ritual stage. See also `PLAN.md` for the hackathon sponsor
+integration map.
+
+## Regenerating Kanaloa's clips
+
+The avatar (`Kanaloa`, Masky avatar `hPozOmvYl2TGkeDxAORy`) and her clips were
+produced with the Masky public API (`POST /avatars`, then one `speak`-mode
+conversation turn per stage, `output: "video"`). Each script is ≤3 sentences so
+one turn renders one clip. Rendered MP4s are uploaded to the site media buckets
+under `media/kiosk/<stage>.mp4`.
