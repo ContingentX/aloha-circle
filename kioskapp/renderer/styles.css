@@ -46,8 +46,10 @@ body:not(.admin-debug) #pose-status {
 
 #pose-status {
   position: absolute;
-  top: 1.4vh;
-  left: 1.6vw;
+  /* The gesture label is canvas-drawn at (12,12)-(432,52); sit below it so the
+     two debug readouts stack instead of overlapping. */
+  top: 60px;
+  left: 12px;
   z-index: 3;
   padding: 0.6vh 1.2vw;
   border-radius: 999px;
