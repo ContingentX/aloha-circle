@@ -188,6 +188,35 @@ function bothWrists(kp) {
   return lw && rw ? [lw, rw] : null;
 }
 
+// COCO-17 ends at the wrist — there are no hand keypoints. The visitor's palm
+// sits roughly a third of a forearm beyond the wrist, which is exactly where
+// "touch your eyes/ears/nose" puts the hand while the wrist stays at the chin.
+// Extrapolate along the elbow→wrist line; without a tracked elbow, the wrist
+// alone has to do.
+const PALM_EXTEND = 0.35;
+
+function palmPt(kp, wristIdx, elbowIdx) {
+  const w = wristPt(kp, wristIdx);
+  if (!w) return null;
+  const e = kp[elbowIdx];
+  if (!e || e.score < MIN_SCORE || !Number.isFinite(e.x) || !Number.isFinite(e.y)) return null;
+  return {
+    x: w.x + (w.x - e.x) * PALM_EXTEND,
+    y: w.y + (w.y - e.y) * PALM_EXTEND,
+    score: w.score,
+  };
+}
+
+// True when the wrist OR its extrapolated palm is within radius of target.
+function handNear(kp, wristIdx, elbowIdx, target, radius) {
+  if (!target) return false;
+  const w = wristPt(kp, wristIdx);
+  if (!w) return false;
+  if (dist(w, target) < radius) return true;
+  const p = palmPt(kp, wristIdx, elbowIdx);
+  return p ? dist(p, target) < radius : false;
+}
+
 // Best available face anchor. Touching the face usually occludes the exact
 // keypoint being blessed (eyes, nose), so every face predicate needs a
 // fallback anchor rather than failing when its target keypoint disappears.
@@ -203,14 +232,6 @@ function faceMid(kp) {
   return null;
 }
 
-function wristsNear(wrists, leftTarget, rightTarget, radius) {
-  if (!wrists || !leftTarget || !rightTarget) return false;
-  const [lw, rw] = wrists;
-  const a = dist(lw, leftTarget) < radius && dist(rw, rightTarget) < radius;
-  const b = dist(lw, rightTarget) < radius && dist(rw, leftTarget) < radius;
-  return a || b;
-}
-
 export function isHandsOverEyes(kp) {
   const wrists = bothWrists(kp);
   const mid = faceMid(kp);
@@ -220,7 +241,10 @@ export function isHandsOverEyes(kp) {
   // Clustered at the face center. Spread wrists belong to the ears blessing —
   // wrist separation, not eye visibility, is what keeps the two apart.
   if (dist(lw, rw) > scale * 0.5) return false;
-  return wrists.every((w) => dist(w, mid) < scale * 0.45);
+  return (
+    handNear(kp, KP.leftWrist, KP.leftElbow, mid, scale * 0.45) &&
+    handNear(kp, KP.rightWrist, KP.rightElbow, mid, scale * 0.45)
+  );
 }
 
 export function isHandsOverEars(kp) {
@@ -230,7 +254,14 @@ export function isHandsOverEars(kp) {
   const scale = shoulderWidth(kp) || 80;
   const le = pt(kp, KP.leftEar) || pt(kp, KP.leftEye);
   const re = pt(kp, KP.rightEar) || pt(kp, KP.rightEye);
-  if (wristsNear(wrists, le, re, scale * 0.55)) return true;
+  const r = scale * 0.55;
+  const straight =
+    handNear(kp, KP.leftWrist, KP.leftElbow, le, r) &&
+    handNear(kp, KP.rightWrist, KP.rightElbow, re, r);
+  const crossed =
+    handNear(kp, KP.leftWrist, KP.leftElbow, re, r) &&
+    handNear(kp, KP.rightWrist, KP.rightElbow, le, r);
+  if (straight || crossed) return true;
   // Palms over the ears hide the ear keypoints themselves: accept spread
   // wrists flanking the face at head height.
   const mid = faceMid(kp);
@@ -246,12 +277,13 @@ export function isHandsOverEars(kp) {
 export function isHandNearNose(kp) {
   // Touching the nose often hides it — fall back to the face anchor.
   const target = pt(kp, KP.nose) || faceMid(kp);
-  const lw = wristPt(kp, KP.leftWrist);
-  const rw = wristPt(kp, KP.rightWrist);
   if (!target) return false;
   const scale = shoulderWidth(kp) || 80;
   const r = scale * 0.5;
-  return (lw && dist(lw, target) < r) || (rw && dist(rw, target) < r);
+  return (
+    handNear(kp, KP.leftWrist, KP.leftElbow, target, r) ||
+    handNear(kp, KP.rightWrist, KP.rightElbow, target, r)
+  );
 }
 
 export function isHandsOnHeart(kp) {
@@ -264,7 +296,10 @@ export function isHandsOnHeart(kp) {
   if (!ls || !rs) return false;
   // Stacked hands occlude one wrist — require every *visible* wrist on the
   // chest instead of demanding both be tracked.
-  const visible = [lw, rw].filter(Boolean);
+  const visible = [
+    lw && { wrist: lw, palm: palmPt(kp, KP.leftWrist, KP.leftElbow) },
+    rw && { wrist: rw, palm: palmPt(kp, KP.rightWrist, KP.rightElbow) },
+  ].filter(Boolean);
   if (visible.length === 0) return false;
   const minX = Math.min(ls.x, rs.x);
   const maxX = Math.max(ls.x, rs.x);
@@ -272,8 +307,8 @@ export function isHandsOnHeart(kp) {
   const hipY = lh && rh ? (lh.y + rh.y) / 2 : shoulderY + (shoulderWidth(kp) || 80) * 1.6;
   const top = shoulderY;
   const bottom = shoulderY + (hipY - shoulderY) * 0.55;
-  const inChest = (w) => w.x >= minX && w.x <= maxX && w.y >= top && w.y <= bottom;
-  return visible.every(inChest);
+  const inChest = (p) => p && p.x >= minX && p.x <= maxX && p.y >= top && p.y <= bottom;
+  return visible.every((h) => inChest(h.wrist) || inChest(h.palm));
 }
 
 /**
