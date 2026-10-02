@@ -5,7 +5,7 @@ import { GESTURE_PROMPTS } from './gestures.js';
 import { createSessionRecorder } from './recorder.js';
 import { createAvatarPlacer, applyPlacement } from './avatarPlacement.js';
 import { initAdminMode } from './adminMode.js';
-import { createBrandSense } from './brands.js';
+import { initBrandPanel } from './brandPanel.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -25,7 +25,6 @@ const els = {
   progress: $('progress'),
   cameraError: $('camera-error'),
   saveStatus: $('save-status'),
-  brandList: $('brand-list'),
 };
 
 const startStage = new URLSearchParams(location.search).get('stage');
@@ -36,17 +35,42 @@ let cameraStream = null;
 const pose = createPoseDetector();
 const recorder = createSessionRecorder();
 const avatarPlacer = createAvatarPlacer();
-const brands = createBrandSense({
-  listEl: els.brandList,
-  describe: (image, prompt) =>
-    typeof window.kiosk?.describeScene === 'function'
-      ? window.kiosk.describeScene(image, prompt)
-      : Promise.resolve({ ok: false, source: 'unset' }),
-  snapshot: () => (els.camera.videoWidth ? snapshot(els.camera) : null),
-  onChange: (items) => {
-    if (recorder.active()) recorder.noteLabels(items);
-  },
-});
+const brandPanel = initBrandPanel();
+brandPanel.setReport({ brands: [] });
+let liveLabels = [];
+let brandReport = null;
+let brandTimer = null;
+
+function paintBrands() {
+  const report = {
+    brands: brandReport?.brands || [],
+    clothingStyle: brandReport?.clothingStyle || [],
+    colors: brandReport?.colors || [],
+    accessories: brandReport?.accessories || [],
+    labels: liveLabels,
+  };
+  brandPanel.setReport(report);
+  if (recorder.active()) {
+    recorder.noteLabels([
+      ...report.brands.map((name) => ({ name, kind: 'brand' })),
+      ...liveLabels.map((name) => ({ name, kind: 'label' })),
+    ]);
+  }
+}
+
+async function pollBrands() {
+  if (typeof window.kiosk?.analyzeBrands !== 'function') return;
+  if (!els.camera.videoWidth) return;
+  try {
+    const result = await window.kiosk.analyzeBrands(snapshot(els.camera));
+    if (result?.ok && result.report) {
+      brandReport = result.report;
+      paintBrands();
+    }
+  } catch (err) {
+    console.warn('[brands] analyze skipped', err);
+  }
+}
 
 // ---- camera ---------------------------------------------------------------
 async function startCamera() {
@@ -59,7 +83,9 @@ async function startCamera() {
     cameraStream = stream;
     els.cameraError.classList.add('hidden');
     pose.start(els.camera, onPoseEvent);
-    brands.start();
+    clearInterval(brandTimer);
+    brandTimer = setInterval(pollBrands, 8000);
+    pollBrands();
   } catch (err) {
     console.error('camera failed:', err);
     els.cameraError.classList.remove('hidden');
@@ -69,10 +95,10 @@ async function startCamera() {
 function onPoseEvent(payload) {
   if (payload && payload.type === 'pose') {
     updateAvatarPlacement(payload.person, payload.video);
-    const live = [];
-    if (payload.person) live.push({ name: 'person', kind: 'label' });
-    if (payload.event) live.push({ name: payload.event, kind: 'label' });
-    if (live.length) brands.push(live);
+    liveLabels = [];
+    if (payload.person) liveLabels.push('person');
+    if (payload.event) liveLabels.push(payload.event);
+    paintBrands();
     return;
   }
   const event = payload && payload.event ? payload.event : payload;
@@ -207,8 +233,14 @@ function trackSession(stage) {
 async function finalizeSession() {
   try {
     showSaveStatus('Saving your Breath of Aloha video…');
-    if (recorder.active()) recorder.noteLabels(brands.snapshot());
+    if (recorder.active()) {
+      recorder.noteLabels([
+        ...(brandReport?.brands || []).map((name) => ({ name, kind: 'brand' })),
+        ...liveLabels.map((name) => ({ name, kind: 'label' })),
+      ]);
+    }
     const { blob, meta } = await recorder.finish();
+    if (brandReport) meta.brandReport = brandReport;
     const result = await window.kiosk.saveRecording(await blob.arrayBuffer(), meta);
     console.log('[recording]', result);
     showSaveStatus(
