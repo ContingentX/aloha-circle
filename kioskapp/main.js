@@ -3,6 +3,7 @@ const path = require('path');
 const { askReasoner } = require('./src/reasoning.cjs');
 const { judgeGesture } = require('./src/cosmos.cjs');
 const { saveRecordingAndUpload } = require('./src/recordings.cjs');
+const { vastConfigFromEnv, uploadToVast, triggerVssSync } = require('./src/vastUpload.cjs');
 const { queueRecap } = require('./src/recap.cjs');
 
 const KIOSK = process.argv.includes('--kiosk');
@@ -63,14 +64,24 @@ app.whenReady().then(() => {
 
   // Post-Mahalo recap reel: queued async, doesn't block the kiosk loop.
   // Takes the saved video path + meta; generates a recap clip next to it.
-  // The existing uploader (from saveRecordingAndUpload) will ship it to VAST.
+  // The session uploader ran at save time, before the recap existed, so the
+  // recap ships to VAST here once generated.
   ipcMain.handle('recap:generate', (_e, videoPath, meta) => {
     queueRecap(videoPath, meta)
-      .then((result) => {
-        if (result.path) {
-          console.log('[recap] generated:', result.path, 'source:', result.source);
-        } else {
+      .then(async (result) => {
+        if (!result.path) {
           console.warn('[recap] no output:', result.source, result.error || '');
+          return;
+        }
+        console.log('[recap] generated:', result.path, 'source:', result.source);
+        const cfg = vastConfigFromEnv(process.env);
+        if (!cfg) return;
+        try {
+          await uploadToVast(result.path, `${cfg.prefix}${path.basename(result.path)}`, cfg);
+          await triggerVssSync(process.env);
+          console.log('[recap] uploaded to VAST');
+        } catch (err) {
+          console.warn('[recap] upload failed, kept local copy:', err.message);
         }
       })
       .catch((err) => console.error('[recap] error:', err.message));

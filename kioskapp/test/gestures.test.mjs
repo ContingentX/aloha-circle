@@ -1,5 +1,8 @@
-import { test } from 'node:test';
+import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import {
   KP,
   classifyGesture,
@@ -14,6 +17,9 @@ import {
 } from '../renderer/gestures.js';
 
 const VIDEO = { width: 640, height: 480 };
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const fixtures = JSON.parse(readFileSync(join(__dirname, 'fixtures/sequences.json'), 'utf8'));
 
 function blank() {
   return new Array(13).fill(null);
@@ -123,4 +129,172 @@ test('dwell tracker needs consecutive frames and resets on a miss', () => {
   assert.equal(dwell.tick('hands_over_eyes'), null);
   assert.equal(dwell.tick('hands_over_eyes'), null);
   assert.equal(dwell.tick('hands_over_eyes'), 'hands_over_eyes');
+});
+
+// ---------------------------------------------------------------------------
+// Fixture-mode tests: replay recorded keypoint sequences through predicates
+// ---------------------------------------------------------------------------
+
+function frameToKeypoints(frame) {
+  if (!frame || !frame.kp) return blank();
+  const kp = blank();
+  const mapping = {
+    nose: KP.nose,
+    leftEye: KP.leftEye,
+    rightEye: KP.rightEye,
+    leftEar: KP.leftEar,
+    rightEar: KP.rightEar,
+    leftShoulder: KP.leftShoulder,
+    rightShoulder: KP.rightShoulder,
+    leftElbow: KP.leftElbow,
+    rightElbow: KP.rightElbow,
+    leftWrist: KP.leftWrist,
+    rightWrist: KP.rightWrist,
+    leftHip: KP.leftHip,
+    rightHip: KP.rightHip,
+  };
+  for (const [name, coords] of Object.entries(frame.kp)) {
+    const idx = mapping[name];
+    if (idx !== undefined && coords !== null) {
+      set(kp, idx, coords[0], coords[1], 0.9);
+    }
+  }
+  return kp;
+}
+
+describe('fixture sequences', () => {
+  const video = fixtures.video;
+
+  test('gaze_at_screen sequence', () => {
+    const seq = fixtures.sequences.gaze_at_screen;
+    for (const frame of seq.frames) {
+      const kp = frameToKeypoints(frame);
+      const result = classifyGesture(kp, video);
+      assert.equal(result.event, seq.expectedEvent, 'expected gaze_at_screen');
+    }
+  });
+
+  test('forehead_touch sequence', () => {
+    const seq = fixtures.sequences.forehead_touch;
+    for (const frame of seq.frames) {
+      const kp = frameToKeypoints(frame);
+      const result = classifyGesture(kp, video);
+      assert.equal(result.event, seq.expectedEvent, 'expected forehead_touch');
+    }
+  });
+
+  test('hands_over_eyes sequence', () => {
+    const seq = fixtures.sequences.hands_over_eyes;
+    for (const frame of seq.frames) {
+      const kp = frameToKeypoints(frame);
+      const result = classifyGesture(kp, video);
+      assert.equal(result.event, seq.expectedEvent, 'expected hands_over_eyes');
+    }
+  });
+
+  test('hands_over_ears sequence', () => {
+    const seq = fixtures.sequences.hands_over_ears;
+    for (const frame of seq.frames) {
+      const kp = frameToKeypoints(frame);
+      const result = classifyGesture(kp, video);
+      assert.equal(result.event, seq.expectedEvent, 'expected hands_over_ears');
+    }
+  });
+
+  test('hand_near_nose sequence', () => {
+    const seq = fixtures.sequences.hand_near_nose;
+    for (const frame of seq.frames) {
+      const kp = frameToKeypoints(frame);
+      const result = classifyGesture(kp, video);
+      assert.equal(result.event, seq.expectedEvent, 'expected hand_near_nose');
+    }
+  });
+
+  test('hands_on_heart sequence', () => {
+    const seq = fixtures.sequences.hands_on_heart;
+    for (const frame of seq.frames) {
+      const kp = frameToKeypoints(frame);
+      const result = classifyGesture(kp, video);
+      assert.equal(result.event, seq.expectedEvent, 'expected hands_on_heart');
+    }
+  });
+
+  test('transition sequence: gaze → hands_over_eyes', () => {
+    const seq = fixtures.sequences.transition_gaze_to_eyes;
+    const expectedEvents = seq.expectedEvents;
+    for (let i = 0; i < seq.frames.length; i++) {
+      const kp = frameToKeypoints(seq.frames[i]);
+      const result = classifyGesture(kp, video);
+      assert.equal(result.event, expectedEvents[i], `frame ${i}: expected ${expectedEvents[i]}`);
+    }
+  });
+
+  test('noisy sequence: gesture changes when wrists lost', () => {
+    const seq = fixtures.sequences.noisy_hands_over_eyes;
+    const expectedEvents = seq.expectedEvents;
+    for (let i = 0; i < seq.frames.length; i++) {
+      const kp = frameToKeypoints(seq.frames[i]);
+      const result = classifyGesture(kp, video);
+      assert.equal(result.event, expectedEvents[i], `frame ${i}: expected ${expectedEvents[i]}`);
+    }
+  });
+
+  test('profile should not trigger gaze_at_screen', () => {
+    const seq = fixtures.sequences.profile_no_gaze;
+    for (const frame of seq.frames) {
+      const kp = frameToKeypoints(frame);
+      const result = classifyGesture(kp, video);
+      assert.equal(result.event, seq.expectedEvent, 'profile should not trigger gaze');
+    }
+  });
+});
+
+describe('dwell with fixture sequences', () => {
+  test('hands_over_eyes triggers after 3 consecutive frames', () => {
+    const seq = fixtures.sequences.hands_over_eyes;
+    const dwell = createDwellTracker({ frames: 3 });
+    const events = [];
+    for (const frame of seq.frames) {
+      const kp = frameToKeypoints(frame);
+      const result = classifyGesture(kp, fixtures.video);
+      const fired = dwell.tick(result.event);
+      events.push(fired);
+    }
+    assert.equal(events[0], null);
+    assert.equal(events[1], null);
+    assert.equal(events[2], 'hands_over_eyes');
+  });
+
+  test('noisy sequence resets dwell when gesture changes', () => {
+    const seq = fixtures.sequences.noisy_hands_over_eyes;
+    const dwell = createDwellTracker({ frames: 3 });
+    const eyesProgress = [];
+    for (const frame of seq.frames) {
+      const kp = frameToKeypoints(frame);
+      const result = classifyGesture(kp, fixtures.video);
+      dwell.tick(result.event);
+      eyesProgress.push(dwell.progress('hands_over_eyes'));
+    }
+    assert.equal(eyesProgress[0] > 0, true, 'frame 0 should accumulate hands_over_eyes');
+    assert.equal(eyesProgress[1], 0, 'frame 1 (gaze) should reset hands_over_eyes dwell');
+    assert.equal(eyesProgress[2] > 0, true, 'frame 2 should start fresh');
+  });
+
+  test('full ritual transition with dwell', () => {
+    const seq = fixtures.sequences.transition_gaze_to_eyes;
+    const dwell = createDwellTracker({ frames: 2 });
+    let gazeFired = false;
+    let eyesFired = false;
+    
+    for (const frame of seq.frames) {
+      const kp = frameToKeypoints(frame);
+      const result = classifyGesture(kp, fixtures.video);
+      const fired = dwell.tick(result.event);
+      if (fired === 'gaze_at_screen') gazeFired = true;
+      if (fired === 'hands_over_eyes') eyesFired = true;
+    }
+    
+    assert.equal(gazeFired, true, 'gaze should have fired during sequence');
+    assert.equal(eyesFired, true, 'hands_over_eyes should have fired during sequence');
+  });
 });

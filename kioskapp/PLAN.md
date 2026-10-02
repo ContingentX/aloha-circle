@@ -86,5 +86,35 @@ from Seth's laptop (if wanted):
 - [x] Gaze-triggered welcome (auto-Begin when the visitor looks at the screen)
 - [x] Avatar dodge animation driven by face bbox
 - [x] Cosmos 3 Reasoner NIM hook as stall-time VLM judge
-- [ ] RF-DETR keypoint loop on the kiosk GPU
+- [x] RF-DETR keypoint client (selectable via `ROBOFLOW_INFER_URL`)
+- [x] Fixture-mode tests for headless CI gesture validation
 - [ ] Recap reel via Cosmos Generator NIM
+
+## Pose backend configuration
+
+The kiosk supports two pose estimation backends, both producing COCO-17 keypoints:
+
+| Backend | Trigger | Use case |
+|---|---|---|
+| **MoveNet Lightning** (default) | No env var | Zero-install, runs in renderer via TF.js WebGL |
+| **RF-DETR Keypoint** | `ROBOFLOW_INFER_URL=http://localhost:9001` | GPU-accelerated via local Roboflow Inference container |
+
+To use RF-DETR:
+1. Start the Roboflow Inference container: `docker run -p 9001:9001 roboflow/inference`
+2. Set the env var before launching: `ROBOFLOW_INFER_URL=http://localhost:9001 npm start`
+
+The pose status pill shows which backend is active ("pose: MoveNet live" or "pose: RF-DETR live").
+
+## Fixture-mode testing
+
+Gesture predicates are testable headless in CI using recorded keypoint sequences.
+Fixtures live in `test/fixtures/sequences.json` — each sequence is a named array
+of frames with expected classification events:
+
+```bash
+npm test   # runs all gesture + fixture tests
+```
+
+Add new sequences by specifying `frames` (array of `{kp: {...}}` objects) and
+either `expectedEvent` (same for all frames) or `expectedEvents` (per-frame).
+See `test/gestures.test.mjs` for examples of dwell tracking over sequences.

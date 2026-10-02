@@ -136,7 +136,15 @@ async function callOpenAICompatible(endpoint, frames, prompt, model, apiKey, opt
 }
 
 async function callNimNative(endpoint, frames, prompt, apiKey, opts) {
-  const FormData = require('form-data') || globalThis.FormData;
+  // form-data is not a declared dependency; a bare require would throw past
+  // the || fallback. Missing package → clear error, caught by the caller,
+  // which degrades to the ffmpeg recap.
+  let FormData;
+  try {
+    FormData = require('form-data');
+  } catch {
+    throw new Error('NIM mode needs the form-data package: npm i form-data');
+  }
   const form = new FormData();
 
   for (const f of frames) {
