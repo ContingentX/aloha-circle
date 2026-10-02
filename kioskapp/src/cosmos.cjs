@@ -36,11 +36,13 @@ function parseConfidence(text) {
   return null;
 }
 
-async function judgeGesture(imageDataUrl, prompt, options = {}) {
+async function callVlm(imageDataUrl, prompt, options = {}) {
   const endpoint = options.endpoint ?? ENDPOINT;
   const model = options.model ?? MODEL;
   const apiKey = options.apiKey ?? API_KEY;
   const timeoutMs = options.timeoutMs ?? TIMEOUT_MS;
+  const maxTokens = options.maxTokens ?? 64;
+  const promptLimit = options.promptLimit ?? 400;
 
   if (!endpoint) return { ok: false, source: 'unset' };
   if (!imageDataUrl || !prompt) return { ok: false, source: 'bad-input' };
@@ -58,13 +60,13 @@ async function judgeGesture(imageDataUrl, prompt, options = {}) {
       signal: controller.signal,
       body: JSON.stringify({
         model,
-        max_tokens: 64,
+        max_tokens: maxTokens,
         messages: [
           {
             role: 'user',
             content: [
               { type: 'image_url', image_url: { url: imageDataUrl } },
-              { type: 'text', text: String(prompt).slice(0, 400) },
+              { type: 'text', text: String(prompt).slice(0, promptLimit) },
             ],
           },
         ],
@@ -76,15 +78,7 @@ async function judgeGesture(imageDataUrl, prompt, options = {}) {
     if (!res.ok) throw new Error(`cosmos ${res.status}`);
     const json = await res.json();
     const text = json.choices?.[0]?.message?.content || '';
-    const trimmedText = String(text).trim();
-    const confidence = parseConfidence(trimmedText);
-
-    return {
-      ok: yes(trimmedText),
-      source: 'cosmos',
-      text: trimmedText,
-      ...(confidence !== null && { confidence }),
-    };
+    return { ok: true, source: 'cosmos', text: String(text).trim() };
   } catch (err) {
     clearTimeout(timeoutId);
 
@@ -98,4 +92,22 @@ async function judgeGesture(imageDataUrl, prompt, options = {}) {
   }
 }
 
-module.exports = { judgeGesture, parseConfidence, yes };
+async function judgeGesture(imageDataUrl, prompt, options = {}) {
+  const result = await callVlm(imageDataUrl, prompt, options);
+  if (result.source !== 'cosmos') return result;
+  const confidence = parseConfidence(result.text);
+  return {
+    ok: yes(result.text),
+    source: 'cosmos',
+    text: result.text,
+    ...(confidence !== null && { confidence }),
+  };
+}
+
+// Open-ended scene read for the admin brand/label rail. ok means the VLM
+// answered — parse the text in the renderer (JSON or comma list).
+async function describeScene(imageDataUrl, prompt, options = {}) {
+  return callVlm(imageDataUrl, prompt, { maxTokens: 256, promptLimit: 600, ...options });
+}
+
+module.exports = { judgeGesture, describeScene, parseConfidence, yes };
