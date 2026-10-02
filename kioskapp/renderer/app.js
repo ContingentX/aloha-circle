@@ -2,6 +2,7 @@ import { STAGES } from './stages.js';
 import { MEDIA_BASE } from './config.js';
 import { createPoseDetector } from './pose.js';
 import { GESTURE_PROMPTS } from './gestures.js';
+import { createSessionRecorder } from './recorder.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -20,13 +21,16 @@ const els = {
   skip: $('btn-skip'),
   progress: $('progress'),
   cameraError: $('camera-error'),
+  saveStatus: $('save-status'),
 };
 
 const startStage = new URLSearchParams(location.search).get('stage');
 let stageIndex = Math.max(0, STAGES.findIndex((s) => s.id === startStage));
 let holdTimer = null;
 let stallTimer = null;
+let cameraStream = null;
 const pose = createPoseDetector();
+const recorder = createSessionRecorder();
 
 // ---- camera ---------------------------------------------------------------
 async function startCamera() {
@@ -36,6 +40,7 @@ async function startCamera() {
       audio: false,
     });
     els.camera.srcObject = stream;
+    cameraStream = stream;
     els.cameraError.classList.add('hidden');
     pose.start(els.camera, onPoseEvent);
   } catch (err) {
@@ -147,12 +152,53 @@ function cancelHold() {
   els.ringFg.style.strokeDashoffset = '326.7';
 }
 
+// ---- session recording ------------------------------------------------------
+// One recording per ritual: starts when the visitor leaves the attract screen,
+// saved only if they reached mahalo (abandoned runs are discarded).
+function trackSession(stage) {
+  if (stage.id === 'attract') {
+    if (!recorder.active()) return;
+    if (recorder.reachedStage('mahalo')) finalizeSession();
+    else recorder.discard();
+    return;
+  }
+  if (!recorder.active() && cameraStream) recorder.begin(cameraStream);
+  recorder.mark(stage.id);
+}
+
+async function finalizeSession() {
+  try {
+    showSaveStatus('Saving your Breath of Aloha video…');
+    const { blob, meta } = await recorder.finish();
+    const result = await window.kiosk.saveRecording(await blob.arrayBuffer(), meta);
+    console.log('[recording]', result);
+    showSaveStatus(
+      result.uploaded
+        ? 'Mahalo! Your session video is on its way to the Aloha Circle gallery.'
+        : 'Mahalo! Your session video was saved on this kiosk.'
+    );
+  } catch (err) {
+    console.warn('[recording] save failed:', err);
+    showSaveStatus('');
+  }
+}
+
+let saveStatusTimer = null;
+function showSaveStatus(text) {
+  if (!els.saveStatus) return;
+  clearTimeout(saveStatusTimer);
+  els.saveStatus.textContent = text;
+  els.saveStatus.classList.toggle('hidden', !text);
+  if (text) saveStatusTimer = setTimeout(() => els.saveStatus.classList.add('hidden'), 12000);
+}
+
 // ---- stage machine --------------------------------------------------------
 function renderStage() {
   const stage = STAGES[stageIndex];
   cancelHold();
   pose.setExpected(stage.detect || null);
   armStallJudge();
+  trackSession(stage);
 
   els.emoji.textContent = stage.emoji || '';
   els.title.textContent = stage.title;
