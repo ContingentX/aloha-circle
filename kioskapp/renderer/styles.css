@@ -330,14 +330,13 @@ button.ghost {
 #wheel-area.grabbed #wheel-svg {
   filter: drop-shadow(0 0 3vh rgba(55, 195, 184, 0.95));
 }
-#wheel-svg .wheel-label {
+#wheel-svg .wheel-number {
   fill: #e9fbff;
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-size: 48px;
+  font-weight: 800;
   paint-order: stroke;
   stroke: rgba(4, 36, 58, 0.55);
-  stroke-width: 3px;
+  stroke-width: 4px;
 }
 #wheel-svg .wheel-hub {
   font-size: 26px;
