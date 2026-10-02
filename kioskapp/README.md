@@ -85,8 +85,52 @@ aside when your face overlaps it.
 Optional **Cosmos 3 Reasoner NIM** (`COSMOS_NIM_URL`) is a second-opinion VLM
 if a gesture stage stalls ~8s — it is not the live detector. See `PLAN.md`.
 
+## Post-Mahalo recap reel (Cosmos Generator NIM)
+
+After Mahalo, the kiosk generates a short stylized recap clip of the visitor's
+ritual journey. This runs asynchronously — the next visitor can start
+immediately. Output is saved alongside the session recording so the existing
+VAST uploader ships it to the gallery.
+
+### Configuration
+
 ```bash
-cd kioskapp && npm test   # gesture predicates + cosmos no-op hook
+export COSMOS_GEN_URL=http://localhost:8000/v1/generate   # or NIM endpoint
+# Optional:
+export COSMOS_GEN_MODE=openai      # 'openai' (default) or 'nim'
+export COSMOS_GEN_MODEL=nvidia/cosmos-generator-i2v
+export COSMOS_API_KEY=...          # or NVIDIA_API_KEY
+```
+
+### Endpoint modes
+
+**OpenAI-compatible (default):** POST JSON to `COSMOS_GEN_URL`
+
+```json
+{
+  "model": "nvidia/cosmos-generator-i2v",
+  "prompt": "Create a gentle, warm highlight reel...",
+  "images": ["data:image/jpeg;base64,..."],
+  "duration_seconds": 14,
+  "fps": 24
+}
+```
+
+Response: `{ "video": "data:video/mp4;base64,..." }` or
+`{ "data": [{ "b64_video": "..." }] }`
+
+**NIM-native (`COSMOS_GEN_MODE=nim`):** POST multipart/form-data with
+`images[]`, `prompt`, `num_frames`, `fps`. Response: binary MP4 or
+`{ "video_base64": "..." }`.
+
+### Fallback
+
+Without `COSMOS_GEN_URL` or on API error, the kiosk falls back to a plain
+ffmpeg-concatenated highlight (one ~2s slice per stage) — there's always a
+shareable artifact. Requires `ffmpeg` in PATH.
+
+```bash
+cd kioskapp && npm test   # gesture predicates + cosmos no-op hook + recap tests
 ```
 
 ## Regenerating Kanaloa's clips
