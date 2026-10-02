@@ -1,9 +1,9 @@
 // Live pose loop for the kiosk.
 //
 // Primary (hackathon, zero-install): MoveNet Lightning via TF.js in the renderer.
-// Planned GPU path: post frames to a local Roboflow Inference server (RF-DETR
-// Keypoint) when ROBOFLOW_INFER_URL is set — same COCO-17 keypoints, same
-// predicates in gestures.js.
+// GPU path: post frames to a local Roboflow Inference server (RF-DETR Keypoint)
+// when ROBOFLOW_INFER_URL is set — same COCO-17 keypoints, same predicates in
+// gestures.js. Example: ROBOFLOW_INFER_URL=http://localhost:9001
 //
 // Cosmos 3 is NOT the live detector. It is an optional VLM judge (see cosmos.cjs)
 // that app.js may call if a gesture stage stalls.
@@ -12,6 +12,7 @@ import {
   classifyGesture,
   createDwellTracker,
 } from './gestures.js';
+import { createRFDETRDetector, getRoboflowInferUrl } from './rfdetr.js';
 
 const FPS_MS = 100;
 const DWELL_FRAMES = 15; // 1.5s at 10 fps
@@ -87,6 +88,20 @@ async function createMoveNetDetector() {
   });
 }
 
+async function createDetector() {
+  const inferUrl = getRoboflowInferUrl();
+  if (inferUrl) {
+    try {
+      const detector = await createRFDETRDetector(inferUrl);
+      return { detector, backend: 'RF-DETR' };
+    } catch (err) {
+      console.warn('[pose] RF-DETR unavailable, falling back to MoveNet:', err.message);
+    }
+  }
+  const detector = await createMoveNetDetector();
+  return { detector, backend: 'MoveNet' };
+}
+
 export function createPoseDetector() {
   let raf = 0;
   let stopped = false;
@@ -108,10 +123,11 @@ export function createPoseDetector() {
       };
 
       try {
-        detector = await createMoveNetDetector();
-        setStatus('pose: MoveNet live');
+        const result = await createDetector();
+        detector = result.detector;
+        setStatus(`pose: ${result.backend} live`);
       } catch (err) {
-        console.warn('[pose] MoveNet unavailable — buttons still work:', err.message);
+        console.warn('[pose] detector unavailable — buttons still work:', err.message);
         setStatus('pose: stub (buttons)');
         return;
       }
