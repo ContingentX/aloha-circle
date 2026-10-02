@@ -13,10 +13,6 @@ const PALETTE = [
   '#2a9d8f', '#e9c46a', '#8ab17d', '#c85c8e',
 ];
 
-function esc(s) {
-  return String(s).replace(/[<>&"']/g, (c) => `&#${c.charCodeAt(0)};`);
-}
-
 function polar(cx, cy, r, deg) {
   const rad = ((deg - 90) * Math.PI) / 180; // 0° = top, clockwise
   return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
@@ -24,6 +20,8 @@ function polar(cx, cy, r, deg) {
 
 // Inner markup for a 400×400 viewBox SVG: a rotor group (#wheel-rotor) whose
 // CSS `transform: rotate()` app.js animates, plus a hub. Pointer lives in HTML.
+// Wedges carry big numbers (1…n), not titles — the landed number is mapped to
+// its experience in the result banner, so labels stay readable while spinning.
 export function buildWheelSvg(experiences) {
   const n = experiences.length;
   const seg = 360 / n;
@@ -42,11 +40,14 @@ export function buildWheelSvg(experiences) {
       `fill="${PALETTE[i % PALETTE.length]}" stroke="rgba(4,36,58,0.6)" stroke-width="2"/>` +
       `<text x="${mid.x.toFixed(1)}" y="${mid.y.toFixed(1)}" ` +
       `transform="rotate(${rot.toFixed(1)} ${mid.x.toFixed(1)} ${mid.y.toFixed(1)})" ` +
-      `text-anchor="middle" dominant-baseline="middle" class="wheel-label">${esc(exp.short)}</text>`
+      `text-anchor="middle" dominant-baseline="middle" class="wheel-number">${i + 1}</text>`
     );
   }).join('');
+  // transform-origin inline on the rotor: CSS rotate() on an SVG group pivots
+  // on the viewBox's 0,0 unless transform-box re-anchors it to the center —
+  // without this the wheel orbits an off-screen axis instead of spinning.
   return (
-    `<g id="wheel-rotor">${wedges}</g>` +
+    `<g id="wheel-rotor" style="transform-box:view-box;transform-origin:50% 50%">${wedges}</g>` +
     `<circle cx="${cx}" cy="${cy}" r="26" fill="#04243a" stroke="#e9fbff" stroke-width="3"/>` +
     `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" class="wheel-hub">\u{1F33A}</text>`
   );
@@ -71,14 +72,22 @@ export function spinOutcome(velocity, { segments, decel = SPIN_DECEL, startAngle
 }
 
 // Gesture: a wrist raised above the face (reaching for the wheel's top), held
-// briefly = grab; then a fast pull down of at least ~1.5 shoulder-widths
-// within the pull window = spin, with velocity set by pull speed.
+// briefly = grab; then a fast pull down of at least ~0.8 shoulder-widths = spin,
+// with velocity set by pull speed. The pull clock starts when the hand actually
+// starts moving (the anchor re-baselines while it hovers at the top), not when
+// the grab fired — reaction time doesn't eat the window. If MoveNet loses the
+// wrist mid-pull (its usual failure during fast motion), the same-side elbow's
+// drop stands in for it.
 // feed(kp13, video, t) returns null | {type:'grab'} | {type:'spin', velocity}.
 export function createGrabSpinGesture(opts = {}) {
   const grabHoldMs = opts.grabHoldMs ?? 250;
   const graceMs = opts.graceMs ?? 300;
-  const maxPullMs = opts.maxPullMs ?? 900;
-  const pullScale = opts.pullScale ?? 1.5;
+  const maxGrabMs = opts.maxGrabMs ?? 5000; // how long a grab may hover before re-arming
+  const maxPullMs = opts.maxPullMs ?? 1200; // window for the pull itself, from its first movement
+  const pullScale = opts.pullScale ?? 0.8;
+  const settleScale = opts.settleScale ?? 0.25; // drift below this keeps re-baselining the anchor
+  const minPullSpeed = opts.minPullSpeed ?? 0.5; // video-heights/s — slower is lowering, not pulling
+  const elbowTravel = opts.elbowTravel ?? 1.6; // the elbow arcs ~60% of the wrist's pull distance
   const minVelocity = opts.minVelocity ?? 360;
   const maxVelocity = opts.maxVelocity ?? 1440;
   const velocityScale = opts.velocityScale ?? 700;
@@ -87,13 +96,19 @@ export function createGrabSpinGesture(opts = {}) {
   let side = null; // KP index of the grabbed wrist
   let raisedSince = 0;
   let lastRaised = 0;
-  let grabY = 0;
-  let grabT = 0;
+  let grabT = 0; // when the grab fired
+  let baseY = 0; // pull anchor: the wrist's y while parked at the top
+  let baseT = 0; // when the anchor last moved = when the pull started
+  let elbowBaseY = null;
   let scale = 0;
 
   const wrist = (kp, idx) => {
     const k = kp[idx];
     return k && k.score >= WRIST_MIN_SCORE && Number.isFinite(k.y) ? k : null;
+  };
+  const elbow = (kp) => {
+    const k = kp[side === KP.leftWrist ? KP.leftElbow : KP.rightElbow];
+    return k && k.score >= MIN_SCORE && Number.isFinite(k.y) ? k : null;
   };
 
   const reset = () => {
@@ -130,8 +145,11 @@ export function createGrabSpinGesture(opts = {}) {
         if (t - raisedSince >= grabHoldMs) {
           state = 'grabbed';
           side = raised[0].i;
-          grabY = raised[0].k.y;
           grabT = t;
+          baseY = raised[0].k.y;
+          baseT = t;
+          const e = elbow(kp);
+          elbowBaseY = e ? e.y : null;
           scale = shoulderWidth(kp) || (video?.height || 480) * 0.15;
           return { type: 'grab' };
         }
@@ -139,16 +157,35 @@ export function createGrabSpinGesture(opts = {}) {
       }
 
       if (state === 'grabbed') {
-        if (t - grabT > maxPullMs) {
+        if (t - grabT > maxGrabMs) {
           reset();
           return null;
         }
-        const k = wrist(kp, side);
-        if (!k) return null; // flicker — the pull window is the real deadline
-        const drop = k.y - grabY;
+        const w = wrist(kp, side);
+        const e = elbow(kp);
+        let drop = null;
+        if (w) drop = w.y - baseY;
+        else if (e && elbowBaseY != null) drop = (e.y - elbowBaseY) * elbowTravel;
+        if (drop == null) return null; // both joints flickered out this frame
+        if (drop < scale * settleScale) {
+          // Hand still parked at the top (or drifting) — follow it so the pull
+          // clock and distance start from where the pull actually begins.
+          if (w) baseY = w.y;
+          if (e) elbowBaseY = e.y;
+          baseT = t;
+          return null;
+        }
+        if (t - baseT > maxPullMs) {
+          reset();
+          return null;
+        }
         if (drop < scale * pullScale) return null;
-        const dtSec = Math.max((t - grabT) / 1000, 0.05);
+        const dtSec = Math.max((t - baseT) / 1000, 0.05);
         const heightsPerSec = drop / Math.max(video?.height || 480, 1) / dtSec;
+        if (heightsPerSec < minPullSpeed) {
+          reset(); // covered the distance but too slowly — a lower, not a pull
+          return null;
+        }
         const velocity = Math.min(maxVelocity, Math.max(minVelocity, heightsPerSec * velocityScale));
         reset();
         return { type: 'spin', velocity };

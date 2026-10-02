@@ -347,8 +347,9 @@ function spinWheel(velocity, source) {
   }
   setTimeout(() => {
     const experience = EXPERIENCES[outcome.index];
-    wheelResult = { experienceId: experience.id, title: experience.title, velocity, source };
-    els.wheelHint.textContent = `\u{1F33A} ${experience.title}!`;
+    const number = outcome.index + 1;
+    wheelResult = { experienceId: experience.id, title: experience.title, number, velocity, source };
+    els.wheelHint.textContent = `\u{1F33A} #${number} — ${experience.title}!`;
     els.next.disabled = false;
     wheelSpinning = false;
     setTimeout(() => {
@@ -399,7 +400,7 @@ function renderMatchStage(active) {
     els.matchReasons.appendChild(li);
   }
   els.matchPrize.textContent = wheelResult
-    ? `You won: ${wheelResult.title} — together with ${local.name}`
+    ? `You won #${wheelResult.number}: ${wheelResult.title} — together with ${local.name}`
     : `An experience to share with ${local.name}`;
 
   claimNonce = claimNonce || crypto.randomUUID().slice(0, 8);

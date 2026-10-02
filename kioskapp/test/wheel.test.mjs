@@ -6,25 +6,35 @@ import { EXPERIENCES } from '../renderer/matchData.js';
 
 const VIDEO = { width: 640, height: 480 };
 
-// 13-slot keypoint frame builder: nose + shoulders fixed, wrists positionable.
-function frame({ leftWrist = null, rightWrist = null, noseY = 200 } = {}) {
+// 13-slot keypoint frame builder: nose + shoulders fixed, wrists/elbows positionable.
+function frame({ leftWrist = null, rightWrist = null, rightElbow = null, noseY = 200 } = {}) {
   const kp = new Array(13).fill(null);
   kp[KP.nose] = { x: 320, y: noseY, score: 0.9 };
   kp[KP.leftShoulder] = { x: 260, y: 280, score: 0.9 };
   kp[KP.rightShoulder] = { x: 380, y: 280, score: 0.9 }; // shoulderWidth = 120
   if (leftWrist) kp[KP.leftWrist] = { score: 0.9, ...leftWrist };
   if (rightWrist) kp[KP.rightWrist] = { score: 0.9, ...rightWrist };
+  if (rightElbow) kp[KP.rightElbow] = { score: 0.9, ...rightElbow };
   return kp;
 }
 
 describe('buildWheelSvg', () => {
-  test('one wedge and label per experience, plus a rotor group', () => {
+  test('one wedge and number label per experience, plus a rotor group', () => {
     const svg = buildWheelSvg(EXPERIENCES);
     assert.ok(svg.includes('id="wheel-rotor"'));
     assert.equal((svg.match(/<path /g) || []).length, EXPERIENCES.length);
-    for (const exp of EXPERIENCES) {
-      assert.ok(svg.includes(`>${exp.short.replace(/[<>&"']/g, (c) => `&#${c.charCodeAt(0)};`)}<`), exp.short);
+    for (let i = 1; i <= EXPERIENCES.length; i++) {
+      assert.ok(svg.includes(`class="wheel-number">${i}<`), `number ${i}`);
     }
+  });
+
+  test('rotor pivots on the wheel center, not the viewBox corner', () => {
+    // CSS rotate() on an SVG group spins around viewBox 0,0 unless the rotor
+    // re-anchors with transform-box — this is the off-screen-axis bug guard.
+    const svg = buildWheelSvg(EXPERIENCES);
+    const rotor = svg.match(/<g id="wheel-rotor"[^>]*>/)[0];
+    assert.ok(rotor.includes('transform-box:view-box'), rotor);
+    assert.ok(rotor.includes('transform-origin:50% 50%'), rotor);
   });
 });
 
@@ -91,19 +101,66 @@ describe('createGrabSpinGesture', () => {
     // only 100ms raised — not yet grabbed
     assert.equal(g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, 100), null);
     assert.equal(g.state, 'raised');
-    // grab, then a shallow 60px pull: below 1.5 × shoulder width → no spin
+    // grab, then a shallow 60px pull: below 0.8 × shoulder width → no spin
     g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, 300);
     assert.equal(g.feed(frame({ rightWrist: { x: 330, y: 180 } }), VIDEO, 500), null);
     assert.equal(g.state, 'grabbed');
   });
 
-  test('pull window expires → back to idle (slow lower ≠ spin)', () => {
+  test('a slow lower covers the distance but is not a pull → back to idle', () => {
     const g = createGrabSpinGesture();
     g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, 0);
     g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, 300);
     assert.equal(g.state, 'grabbed');
+    // 240px over 1.2s ≈ 0.42 heights/s — under the 0.5 pull-speed floor
     assert.equal(g.feed(frame({ rightWrist: { x: 330, y: 360 } }), VIDEO, 1500), null);
     assert.equal(g.state, 'idle');
+  });
+
+  test('pull window expires once the hand starts moving and stalls', () => {
+    const g = createGrabSpinGesture();
+    g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, 0);
+    g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, 300);
+    g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, 600); // parked — anchor refreshes
+    // moved 50px (past the settle band) but 1.4s after the anchor → expired
+    assert.equal(g.feed(frame({ rightWrist: { x: 330, y: 170 } }), VIDEO, 2000), null);
+    assert.equal(g.state, 'idle');
+  });
+
+  test('hovering at the top does not burn the pull window (re-baseline)', () => {
+    const g = createGrabSpinGesture();
+    g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, 0);
+    assert.deepEqual(g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, 300), { type: 'grab' });
+    // Visitor reads the "pull down" hint for 1.2s before moving — the old code
+    // timed out here because its window started at the grab itself.
+    for (const t of [600, 900, 1200, 1500]) {
+      assert.equal(g.feed(frame({ rightWrist: { x: 330, y: 121 } }), VIDEO, t), null);
+      assert.equal(g.state, 'grabbed');
+    }
+    const spin = g.feed(frame({ rightWrist: { x: 330, y: 361 } }), VIDEO, 1800);
+    assert.equal(spin.type, 'spin');
+  });
+
+  test('wrist lost mid-pull → the elbow drop carries the spin', () => {
+    const g = createGrabSpinGesture();
+    const atTop = frame({ rightWrist: { x: 330, y: 120 }, rightElbow: { x: 350, y: 200 } });
+    g.feed(atTop, VIDEO, 0);
+    assert.deepEqual(g.feed(atTop, VIDEO, 300), { type: 'grab' });
+    // MoveNet drops the fast-moving wrist; elbow fell 120px ≈ 192px of wrist travel
+    const spin = g.feed(frame({ rightElbow: { x: 350, y: 320 } }), VIDEO, 650);
+    assert.equal(spin.type, 'spin');
+    assert.ok(spin.velocity >= 360, `velocity ${spin.velocity}`);
+  });
+
+  test('a grab left hovering eventually re-arms', () => {
+    const g = createGrabSpinGesture();
+    g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, 0);
+    g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, 300);
+    for (let t = 600; t <= 5100; t += 500) {
+      g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, t);
+    }
+    assert.equal(g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, 5400), null);
+    assert.equal(g.state, 'idle'); // re-armed: the next raised hold can grab again
   });
 
   test('one flickered frame does not drop the raise', () => {
