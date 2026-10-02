@@ -180,6 +180,54 @@ test('hands at the sides never read as hands_on_heart', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Palm extrapolation: COCO-17 ends at the wrist, but palms-on-face leaves the
+// wrists at chin height — the predicates must extend along elbow→wrist.
+// ---------------------------------------------------------------------------
+
+test('hands_over_eyes: wrists at the chin, palms extrapolate onto the eyes', () => {
+  const kp = standing(); // faceMid = (320, 100), shoulder scale = 120
+  kp[KP.leftWrist] = { x: 300, y: 160, score: 0.9 }; // 63px from faceMid — outside the wrist radius (54)
+  kp[KP.leftElbow] = { x: 240, y: 290, score: 0.9 }; // palm → (321, 114.5), inside
+  kp[KP.rightWrist] = { x: 340, y: 160, score: 0.9 };
+  kp[KP.rightElbow] = { x: 400, y: 290, score: 0.9 }; // palm → (319, 114.5)
+  assert.equal(isHandsOverEyes(kp), true);
+  assert.equal(classifyGesture(kp, VIDEO).event, 'hands_over_eyes');
+});
+
+test('hands_over_ears: wrists at the jaw, palms extrapolate onto the ears', () => {
+  const kp = standing(); // ears at (280,110) / (360,110), radius = 66
+  kp[KP.leftWrist] = { x: 265, y: 185, score: 0.9 }; // 76px from left ear — outside
+  kp[KP.leftElbow] = { x: 245, y: 305, score: 0.9 }; // palm → (272, 143), inside
+  kp[KP.rightWrist] = { x: 375, y: 185, score: 0.9 };
+  kp[KP.rightElbow] = { x: 395, y: 305, score: 0.9 }; // palm → (368, 143)
+  assert.equal(isHandsOverEars(kp), true);
+  assert.equal(classifyGesture(kp, VIDEO).event, 'hands_over_ears');
+});
+
+test('hand_near_nose: wrist below the chin, palm extrapolates onto the nose', () => {
+  const kp = standing(); // nose at (320, 120), radius = 60
+  kp[KP.rightWrist] = { x: 330, y: 190, score: 0.9 }; // 71px from nose — outside
+  kp[KP.rightElbow] = { x: 355, y: 330, score: 0.9 }; // palm → (321.25, 141), inside
+  assert.equal(isHandNearNose(kp), true);
+});
+
+test('palm extrapolation needs a tracked elbow — wrist-only stays out of range', () => {
+  const kp = standing();
+  kp[KP.leftWrist] = { x: 300, y: 160, score: 0.9 };
+  kp[KP.rightWrist] = { x: 340, y: 160, score: 0.9 };
+  kp[KP.leftElbow] = null;
+  kp[KP.rightElbow] = null;
+  assert.equal(isHandsOverEyes(kp), false);
+});
+
+test('hands at the sides never extrapolate into a blessing', () => {
+  const kp = standing(); // arms hang down: palms extend further down, away from the face
+  assert.equal(classifyGesture(kp, VIDEO).event, 'gaze_at_screen');
+  assert.equal(isHandsOnHeart(kp), false);
+  assert.equal(isHandNearNose(kp), false);
+});
+
+// ---------------------------------------------------------------------------
 // Fixture-mode tests: replay recorded keypoint sequences through predicates
 // ---------------------------------------------------------------------------
 

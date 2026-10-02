@@ -82,23 +82,38 @@ function snapshot(video) {
   return c.toDataURL('image/jpeg', 0.7);
 }
 
+const STALL_FIRST_MS = 8000;
+const STALL_RETRY_MS = 5000;
+let stallGen = 0;
+
 function armStallJudge() {
   clearTimeout(stallTimer);
   stallTimer = null;
+  const gen = ++stallGen;
   const stage = STAGES[stageIndex];
   if (!stage.detect || typeof window.kiosk?.judgeGesture !== 'function') return;
-  stallTimer = setTimeout(async () => {
-    const prompt = GESTURE_PROMPTS[stage.detect];
-    if (!prompt || STAGES[stageIndex].id !== stage.id) return;
+  const prompt = GESTURE_PROMPTS[stage.detect];
+  if (!prompt) return;
+  const live = () => gen === stallGen && STAGES[stageIndex].id === stage.id;
+  const poll = async () => {
+    if (!live()) return;
+    let advanced = false;
     try {
       const judge = await window.kiosk.judgeGesture(snapshot(els.camera), prompt);
-      if (judge?.ok && STAGES[stageIndex].detect === stage.detect) {
+      if (judge?.ok && live()) {
+        advanced = true;
         onPoseEvent({ type: 'gesture', event: stage.detect, source: 'cosmos' });
       }
     } catch (err) {
       console.warn('[cosmos] stall judge skipped', err);
     }
-  }, 8000);
+    // A NO (or a timeout) is not final — the visitor may settle into the pose
+    // after the first check. Keep asking until the stage moves on.
+    if (!advanced && live()) {
+      stallTimer = setTimeout(poll, STALL_RETRY_MS);
+    }
+  };
+  stallTimer = setTimeout(poll, STALL_FIRST_MS);
 }
 
 // ---- avatar clips ---------------------------------------------------------
