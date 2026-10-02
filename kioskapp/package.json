@@ -7,7 +7,7 @@
   "scripts": {
     "start": "electron .",
     "kiosk": "electron . --kiosk",
-    "test": "node --test test/gestures.test.mjs test/avatarPlacement.test.mjs test/cosmos.test.cjs test/recordings.test.cjs test/recap.test.cjs",
+    "test": "node --test test/gestures.test.mjs test/avatarPlacement.test.mjs test/adminMode.test.mjs test/cosmos.test.cjs test/recordings.test.cjs test/recap.test.cjs",
     "fetch-media": "node scripts/fetch-media.mjs"
   },
   "devDependencies": {

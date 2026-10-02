@@ -37,6 +37,13 @@ html, body {
   z-index: 1;
 }
 
+/* Pose-debug visuals (face box, keypoint dots, gesture label, backend pill)
+   are admin-only — hidden until the "aloha" key sequence + switch enable them. */
+body:not(.admin-debug) #pose-overlay,
+body:not(.admin-debug) #pose-status {
+  display: none;
+}
+
 #pose-status {
   position: absolute;
   top: 1.4vh;
@@ -180,6 +187,51 @@ button.ghost {
 }
 
 .hidden { display: none !important; }
+
+/* Admin debug switch (top right, revealed by typing "aloha") */
+#admin-toggle {
+  position: absolute;
+  top: 1.4vh;
+  right: 1.6vw;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 0.8vw;
+  padding: 0.6vh 1.2vw;
+  border-radius: 999px;
+  background: rgba(4, 36, 58, 0.7);
+  border: 1px solid rgba(233, 251, 255, 0.25);
+  font-size: 1.6vh;
+  letter-spacing: 0.04em;
+}
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 4.6vh;
+  height: 2.4vh;
+}
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+  border-radius: 999px;
+  background: rgba(233, 251, 255, 0.25);
+  transition: background 0.2s;
+}
+.slider::before {
+  content: '';
+  position: absolute;
+  width: 1.8vh;
+  height: 1.8vh;
+  left: 0.3vh;
+  top: 0.3vh;
+  border-radius: 50%;
+  background: var(--foam);
+  transition: transform 0.2s;
+}
+.switch input:checked + .slider { background: var(--teal); }
+.switch input:checked + .slider::before { transform: translateX(2.2vh); }
 
 #save-status {
   position: absolute;
