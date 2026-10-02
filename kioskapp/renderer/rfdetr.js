@@ -2,13 +2,13 @@
 // Used when ROBOFLOW_INFER_URL is set (e.g. http://localhost:9001).
 // Returns COCO-17 keypoints in the same format as MoveNet for gestures.js.
 
-import { normalizeKeypoints } from './gestures.js';
-
 const INFERENCE_TIMEOUT_MS = 2000;
 
 export function getRoboflowInferUrl() {
-  if (typeof window !== 'undefined' && window.ROBOFLOW_INFER_URL) {
-    return window.ROBOFLOW_INFER_URL;
+  // Sandboxed renderer: the env var crosses via the preload bridge.
+  if (typeof window !== 'undefined') {
+    if (window.kiosk?.roboflowInferUrl) return window.kiosk.roboflowInferUrl;
+    if (window.ROBOFLOW_INFER_URL) return window.ROBOFLOW_INFER_URL;
   }
   if (typeof process !== 'undefined' && process.env?.ROBOFLOW_INFER_URL) {
     return process.env.ROBOFLOW_INFER_URL;
