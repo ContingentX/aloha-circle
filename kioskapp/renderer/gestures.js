@@ -99,6 +99,56 @@ export function faceBox(kp) {
   return { x, y, w, h, cx: x + w / 2, cy: y + h / 2, area: w * h };
 }
 
+export function personBoundingBox(kp, video = { width: 640, height: 480 }) {
+  const bodyParts = [
+    pt(kp, KP.nose),
+    pt(kp, KP.leftEye),
+    pt(kp, KP.rightEye),
+    pt(kp, KP.leftEar),
+    pt(kp, KP.rightEar),
+    pt(kp, KP.leftShoulder),
+    pt(kp, KP.rightShoulder),
+    pt(kp, KP.leftElbow),
+    pt(kp, KP.rightElbow),
+    pt(kp, KP.leftWrist),
+    pt(kp, KP.rightWrist),
+    pt(kp, KP.leftHip),
+    pt(kp, KP.rightHip),
+  ].filter(Boolean);
+  if (bodyParts.length < 3) return null;
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of bodyParts) {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+
+  const width = maxX - minX;
+  const height = maxY - minY;
+  const padX = Math.max(20, width * 0.15);
+  const padY = Math.max(20, height * 0.1);
+
+  const x = Math.max(0, minX - padX);
+  const y = Math.max(0, minY - padY);
+  const w = Math.min(video.width - x, width + padX * 2);
+  const h = Math.min(video.height - y, height + padY * 2);
+
+  const frameFill = (w * h) / (video.width * video.height);
+
+  return {
+    x, y, w, h,
+    cx: x + w / 2,
+    cy: y + h / 2,
+    area: w * h,
+    frameFill,
+  };
+}
+
 export function isGazeAtScreen(kp, video) {
   const le = pt(kp, KP.leftEye);
   const re = pt(kp, KP.rightEye);
@@ -192,8 +242,9 @@ export function classifyGesture(rawKeypoints, video = { width: 640, height: 480 
   const kp = Array.isArray(rawKeypoints) && rawKeypoints.length === 13 && !rawKeypoints[0]?.name
     ? rawKeypoints
     : normalizeKeypoints(rawKeypoints);
-  const box = faceBox(kp);
-  const result = { event: null, face: box, keypoints: kp };
+  const face = faceBox(kp);
+  const person = personBoundingBox(kp, video);
+  const result = { event: null, face, person, keypoints: kp };
 
   if (isHandsOverEyes(kp)) result.event = 'hands_over_eyes';
   else if (isHandsOverEars(kp)) result.event = 'hands_over_ears';

@@ -149,15 +149,16 @@ export function createPoseDetector() {
         }
 
         const raw = poses[0]?.keypoints || [];
-        const classified = classifyGesture(raw, videoSize(videoEl));
+        const video = videoSize(videoEl);
+        const classified = classifyGesture(raw, video);
         if (canvas) {
           if (canvas.width !== canvas.clientWidth) canvas.width = canvas.clientWidth;
           if (canvas.height !== canvas.clientHeight) canvas.height = canvas.clientHeight;
           drawOverlay(canvas, videoEl, classified, dwell, expected);
         }
 
-        if (classified.face && typeof onEvent === 'function') {
-          onEvent({ type: 'face', face: classified.face, video: videoSize(videoEl) });
+        if ((classified.face || classified.person) && typeof onEvent === 'function') {
+          onEvent({ type: 'pose', face: classified.face, person: classified.person, video });
         }
 
         const watching = expected && classified.event === expected ? classified.event : null;

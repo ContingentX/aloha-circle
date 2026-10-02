@@ -3,6 +3,7 @@ import { MEDIA_BASE } from './config.js';
 import { createPoseDetector } from './pose.js';
 import { GESTURE_PROMPTS } from './gestures.js';
 import { createSessionRecorder } from './recorder.js';
+import { createAvatarPlacer, applyPlacement } from './avatarPlacement.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -31,6 +32,7 @@ let stallTimer = null;
 let cameraStream = null;
 const pose = createPoseDetector();
 const recorder = createSessionRecorder();
+const avatarPlacer = createAvatarPlacer();
 
 // ---- camera ---------------------------------------------------------------
 async function startCamera() {
@@ -50,8 +52,8 @@ async function startCamera() {
 }
 
 function onPoseEvent(payload) {
-  if (payload && payload.type === 'face') {
-    dodgeAvatar(payload.face, payload.video);
+  if (payload && payload.type === 'pose') {
+    updateAvatarPlacement(payload.person, payload.video);
     return;
   }
   const event = payload && payload.event ? payload.event : payload;
@@ -64,12 +66,12 @@ function onPoseEvent(payload) {
   advance();
 }
 
-function dodgeAvatar(face, video) {
-  if (!face || !video || !video.width) return;
+function updateAvatarPlacement(person, video) {
   if (els.avatarCard.classList.contains('hidden')) return;
-  // Camera is CSS-mirrored, so video x=0 is the right edge of the screen.
-  const screenX = (1 - face.cx / video.width) * window.innerWidth;
-  els.avatarCard.classList.toggle('dodge-left', screenX > window.innerWidth * 0.55);
+  const position = avatarPlacer.update(person, video);
+  if (position) {
+    applyPlacement(els.avatarCard, position);
+  }
 }
 
 function snapshot(video) {
@@ -105,10 +107,12 @@ function playClip(name) {
     els.avatarCard.classList.add('hidden');
     els.avatarVideo.pause();
     els.avatarVideo.removeAttribute('src');
+    avatarPlacer.reset();
     return;
   }
   els.avatarCard.classList.remove('hidden');
-  els.avatarCard.classList.remove('dodge-left');
+  avatarPlacer.reset();
+  applyPlacement(els.avatarCard, avatarPlacer.forceUpdate(null, null));
   const local = `../assets/clips/${name}.mp4`;
   const remote = `${MEDIA_BASE}/${name}.mp4`;
   els.avatarVideo.onerror = () => {
