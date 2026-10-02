@@ -1,6 +1,7 @@
 const { app, BrowserWindow, session, ipcMain } = require('electron');
 const path = require('path');
 const { askReasoner } = require('./src/reasoning.cjs');
+const { judgeGesture } = require('./src/cosmos.cjs');
 
 const KIOSK = process.argv.includes('--kiosk');
 
@@ -49,6 +50,9 @@ app.whenReady().then(() => {
   // Optional reasoning hook (CoreWeave / W&B inference). Renderer gets a canned
   // line back when COREWEAVE_API_KEY isn't in the environment.
   ipcMain.handle('reasoning:ask', (_e, prompt) => askReasoner(prompt));
+  ipcMain.handle('cosmos:judge', (_e, imageDataUrl, prompt) =>
+    judgeGesture(imageDataUrl, prompt)
+  );
 
   createWindow();
 });

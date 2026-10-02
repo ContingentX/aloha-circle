@@ -8,7 +8,8 @@ export const STAGES = [
     kind: 'attract',
     title: 'The Breath of Aloha',
     subtitle: 'E komo mai — welcome to the Aloha Circle',
-    instruction: 'Put on the headphones, stand in the circle, and touch the Begin button.',
+    instruction: 'Put on the headphones, stand in the circle, and look at the screen — or touch Begin.',
+    detect: 'gaze_at_screen',
     button: 'Begin',
   },
   {
@@ -17,7 +18,6 @@ export const STAGES = [
     title: 'Meet Kanaloa',
     clip: 'welcome',
     instruction: 'Kanaloa is welcoming you — listen with your headphones.',
-    detect: 'gaze_at_screen', // future: auto-play when the visitor looks at the screen
     button: 'I’m ready',
   },
   {

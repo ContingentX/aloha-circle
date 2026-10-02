@@ -1,6 +1,7 @@
 import { STAGES } from './stages.js';
 import { MEDIA_BASE } from './config.js';
 import { createPoseDetector } from './pose.js';
+import { GESTURE_PROMPTS } from './gestures.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -24,6 +25,8 @@ const els = {
 const startStage = new URLSearchParams(location.search).get('stage');
 let stageIndex = Math.max(0, STAGES.findIndex((s) => s.id === startStage));
 let holdTimer = null;
+let stallTimer = null;
+const pose = createPoseDetector();
 
 // ---- camera ---------------------------------------------------------------
 async function startCamera() {
@@ -34,18 +37,61 @@ async function startCamera() {
     });
     els.camera.srcObject = stream;
     els.cameraError.classList.add('hidden');
-    // Pose detection is stubbed for the MVP — see pose.js for the RF-DETR plan.
-    createPoseDetector().start(els.camera, onPoseEvent);
+    pose.start(els.camera, onPoseEvent);
   } catch (err) {
     console.error('camera failed:', err);
     els.cameraError.classList.remove('hidden');
   }
 }
 
-// Future: pose events auto-advance stages instead of the Next button.
-function onPoseEvent(event) {
+function onPoseEvent(payload) {
+  if (payload && payload.type === 'face') {
+    dodgeAvatar(payload.face, payload.video);
+    return;
+  }
+  const event = payload && payload.event ? payload.event : payload;
   const stage = STAGES[stageIndex];
-  if (stage.detect && event === stage.detect) advance();
+  if (!stage.detect || event !== stage.detect) return;
+  if (stage.kind === 'hold') {
+    if (!holdTimer) startHold(stage.holdSeconds, advance);
+    return;
+  }
+  advance();
+}
+
+function dodgeAvatar(face, video) {
+  if (!face || !video || !video.width) return;
+  if (els.avatarCard.classList.contains('hidden')) return;
+  // Camera is CSS-mirrored, so video x=0 is the right edge of the screen.
+  const screenX = (1 - face.cx / video.width) * window.innerWidth;
+  els.avatarCard.classList.toggle('dodge-left', screenX > window.innerWidth * 0.55);
+}
+
+function snapshot(video) {
+  const c = document.createElement('canvas');
+  c.width = 640;
+  c.height = 360;
+  c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.7);
+}
+
+function armStallJudge() {
+  clearTimeout(stallTimer);
+  stallTimer = null;
+  const stage = STAGES[stageIndex];
+  if (!stage.detect || typeof window.kiosk?.judgeGesture !== 'function') return;
+  stallTimer = setTimeout(async () => {
+    const prompt = GESTURE_PROMPTS[stage.detect];
+    if (!prompt || STAGES[stageIndex].id !== stage.id) return;
+    try {
+      const judge = await window.kiosk.judgeGesture(snapshot(els.camera), prompt);
+      if (judge?.ok && STAGES[stageIndex].detect === stage.detect) {
+        onPoseEvent({ type: 'gesture', event: stage.detect, source: 'cosmos' });
+      }
+    } catch (err) {
+      console.warn('[cosmos] stall judge skipped', err);
+    }
+  }, 8000);
 }
 
 // ---- avatar clips ---------------------------------------------------------
@@ -57,6 +103,7 @@ function playClip(name) {
     return;
   }
   els.avatarCard.classList.remove('hidden');
+  els.avatarCard.classList.remove('dodge-left');
   const local = `../assets/clips/${name}.mp4`;
   const remote = `${MEDIA_BASE}/${name}.mp4`;
   els.avatarVideo.onerror = () => {
@@ -74,7 +121,6 @@ function playClip(name) {
 function startHold(seconds, onDone) {
   cancelHold();
   const total = seconds * 1000;
-  const circumference = 326.7;
   els.holdRing.classList.remove('hidden');
   els.holdRing.classList.add('running');
   els.ringFg.style.transitionDuration = `${total}ms`;
@@ -105,6 +151,8 @@ function cancelHold() {
 function renderStage() {
   const stage = STAGES[stageIndex];
   cancelHold();
+  pose.setExpected(stage.detect || null);
+  armStallJudge();
 
   els.emoji.textContent = stage.emoji || '';
   els.title.textContent = stage.title;
@@ -134,8 +182,7 @@ function advance() {
 els.next.addEventListener('click', () => {
   const stage = STAGES[stageIndex];
   if (stage.kind === 'hold') {
-    // MVP: the button simulates the forehead touch; the pose detector will
-    // trigger this automatically once RF-DETR keypoints land (see pose.js).
+    // Button still simulates the forehead touch when the detector misses.
     startHold(stage.holdSeconds, advance);
   } else {
     advance();

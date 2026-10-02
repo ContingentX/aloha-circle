@@ -51,10 +51,18 @@ Without the key the kiosk uses canned fallback lines.
 
 ## Pose detection
 
-Stubbed in `renderer/pose.js`, which documents the full RF-DETR Keypoint /
-Roboflow Inference plan (per the NVIDIA team's recommendation) and the gesture
-predicates for each ritual stage. See also `PLAN.md` for the hackathon sponsor
-integration map.
+Live in `renderer/pose.js` (MoveNet Lightning via TF.js) with deterministic
+predicates in `renderer/gestures.js`. Stages auto-advance after a 1.5s dwell;
+Next/Skip still work if the model misses. Gaze on the attract screen starts the
+welcome; leaning into the camera starts the 5s honi hold; Kanaloa's card slides
+aside when your face overlaps it.
+
+Optional **Cosmos 3 Reasoner NIM** (`COSMOS_NIM_URL`) is a second-opinion VLM
+if a gesture stage stalls ~8s — it is not the live detector. See `PLAN.md`.
+
+```bash
+cd kioskapp && npm test   # gesture predicates + cosmos no-op hook
+```
 
 ## Regenerating Kanaloa's clips
 
