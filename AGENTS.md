@@ -17,3 +17,11 @@ Monorepo: `/www` (Vite React site), `/app` (Expo RN app), `/agentharness` (Node 
 - Keep the matcher deterministic and testable; LLM/agent logic stays behind the harness boundary in `/agentharness`, never in the clients.
 - `www` builds are static; API location is baked in via `VITE_API_BASE` at build time. Client code must tolerate the API being unset/unreachable (visible error, no crashes).
 - Update the "Qodo Code Review Evidence" table in README.md when a PR merges.
+
+## Cursor Cloud specific instructions
+
+- Node 22 comes from nvm. Put that version's `bin` first on `PATH` (`nvm use 22`, then `dirname "$(nvm which 22)"`). Another `node` earlier on `PATH` is not the project runtime.
+- `npm ci` in `agentharness` fails unless you pass `--legacy-peer-deps`: the lockfile omits the optional `jose@^5` peer pulled in by `@brightdata/mcp`. Use the same flag for `www` and `app`.
+- The local demo needs no AWS, Stripe, Firebase, Bright Data, or TrueForge credentials. `npm --prefix agentharness test` is hermetic. Ingest reports `needs_repair` for `broken-source-demo` and `brightdata-live-example` when no Bright Data token is configured; the fixture sources still load.
+- API: `npm --prefix agentharness start` on `http://127.0.0.1:8787`. Site: `npm --prefix www run dev -- --host 0.0.0.0 --port 5173` (Vite proxies `/api` to the harness). Hello-world is the "What brought you to Maui?" form, which posts `/api/visitors` and renders "Your Maui Match".
+- `app` (Expo) installs with the same `npm ci`. Leave it stopped on boot; it needs a device or simulator.
