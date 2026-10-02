@@ -1,0 +1,16 @@
+{
+  "name": "aloha-circle-kiosk",
+  "version": "0.1.0",
+  "description": "Aloha Circle kiosk app — the Breath of Aloha guided ritual with Kanaloa, for the screens at the Aloha Circle in Maui",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "kiosk": "electron . --kiosk",
+    "test": "node --test test/gestures.test.mjs test/cosmos.test.cjs",
+    "fetch-media": "node scripts/fetch-media.mjs"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}
