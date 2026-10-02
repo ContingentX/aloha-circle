@@ -5,6 +5,7 @@ import { GESTURE_PROMPTS } from './gestures.js';
 import { createSessionRecorder } from './recorder.js';
 import { createAvatarPlacer, applyPlacement } from './avatarPlacement.js';
 import { initAdminMode } from './adminMode.js';
+import { createBrandSense } from './brands.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -24,6 +25,7 @@ const els = {
   progress: $('progress'),
   cameraError: $('camera-error'),
   saveStatus: $('save-status'),
+  brandList: $('brand-list'),
 };
 
 const startStage = new URLSearchParams(location.search).get('stage');
@@ -34,6 +36,17 @@ let cameraStream = null;
 const pose = createPoseDetector();
 const recorder = createSessionRecorder();
 const avatarPlacer = createAvatarPlacer();
+const brands = createBrandSense({
+  listEl: els.brandList,
+  describe: (image, prompt) =>
+    typeof window.kiosk?.describeScene === 'function'
+      ? window.kiosk.describeScene(image, prompt)
+      : Promise.resolve({ ok: false, source: 'unset' }),
+  snapshot: () => (els.camera.videoWidth ? snapshot(els.camera) : null),
+  onChange: (items) => {
+    if (recorder.active()) recorder.noteLabels(items);
+  },
+});
 
 // ---- camera ---------------------------------------------------------------
 async function startCamera() {
@@ -46,6 +59,7 @@ async function startCamera() {
     cameraStream = stream;
     els.cameraError.classList.add('hidden');
     pose.start(els.camera, onPoseEvent);
+    brands.start();
   } catch (err) {
     console.error('camera failed:', err);
     els.cameraError.classList.remove('hidden');
@@ -55,6 +69,10 @@ async function startCamera() {
 function onPoseEvent(payload) {
   if (payload && payload.type === 'pose') {
     updateAvatarPlacement(payload.person, payload.video);
+    const live = [];
+    if (payload.person) live.push({ name: 'person', kind: 'label' });
+    if (payload.event) live.push({ name: payload.event, kind: 'label' });
+    if (live.length) brands.push(live);
     return;
   }
   const event = payload && payload.event ? payload.event : payload;
@@ -189,6 +207,7 @@ function trackSession(stage) {
 async function finalizeSession() {
   try {
     showSaveStatus('Saving your Breath of Aloha video…');
+    if (recorder.active()) recorder.noteLabels(brands.snapshot());
     const { blob, meta } = await recorder.finish();
     const result = await window.kiosk.saveRecording(await blob.arrayBuffer(), meta);
     console.log('[recording]', result);

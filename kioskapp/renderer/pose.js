@@ -13,6 +13,7 @@ import {
   createDwellTracker,
 } from './gestures.js';
 import { createRFDETRDetector, getRoboflowInferUrl } from './rfdetr.js';
+import { formatPoseLabel } from './brands.js';
 
 const FPS_MS = 100;
 const DWELL_FRAMES = 12; // ~1.2s at 10 fps (dwell decays on misses, see gestures.js)
@@ -34,7 +35,7 @@ function coverMap(video, canvas) {
   };
 }
 
-function drawOverlay(canvas, video, classified, dwell, expected) {
+function drawOverlay(canvas, video, classified) {
   const ctx = canvas.getContext('2d');
   const w = canvas.width;
   const h = canvas.height;
@@ -62,17 +63,6 @@ function drawOverlay(canvas, video, classified, dwell, expected) {
   }
 
   ctx.restore();
-
-  const label = classified.event
-    ? `${classified.event}  ${(dwell.progress(classified.event) * 100) | 0}%`
-    : expected
-      ? `waiting: ${expected}`
-      : 'no pose';
-  ctx.fillStyle = 'rgba(4, 36, 58, 0.65)';
-  ctx.fillRect(12, 12, Math.min(w - 24, 420), 40);
-  ctx.fillStyle = '#e9fbff';
-  ctx.font = '16px Segoe UI, system-ui, sans-serif';
-  ctx.fillText(label, 24, 38);
 }
 
 async function createMoveNetDetector() {
@@ -118,8 +108,12 @@ export function createPoseDetector() {
       stopped = false;
       const canvas = opts.overlay || document.getElementById('pose-overlay');
       const status = opts.status || document.getElementById('pose-status');
+      const labelEl = opts.label || document.getElementById('pose-label');
       const setStatus = (text) => {
         if (status) status.textContent = text;
+      };
+      const setLabel = (text) => {
+        if (labelEl) labelEl.textContent = text;
       };
 
       try {
@@ -154,11 +148,18 @@ export function createPoseDetector() {
         if (canvas) {
           if (canvas.width !== canvas.clientWidth) canvas.width = canvas.clientWidth;
           if (canvas.height !== canvas.clientHeight) canvas.height = canvas.clientHeight;
-          drawOverlay(canvas, videoEl, classified, dwell, expected);
+          drawOverlay(canvas, videoEl, classified);
         }
+        setLabel(formatPoseLabel(classified, dwell, expected));
 
         if ((classified.face || classified.person) && typeof onEvent === 'function') {
-          onEvent({ type: 'pose', face: classified.face, person: classified.person, video });
+          onEvent({
+            type: 'pose',
+            face: classified.face,
+            person: classified.person,
+            video,
+            event: classified.event || null,
+          });
         }
 
         const watching = expected && classified.event === expected ? classified.event : null;

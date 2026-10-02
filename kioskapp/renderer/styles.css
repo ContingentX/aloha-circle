@@ -37,18 +37,28 @@ html, body {
   z-index: 1;
 }
 
-/* Pose-debug visuals (face box, keypoint dots, gesture label, backend pill)
+/* Pose-debug visuals (face box, keypoint dots, stacked pills, brand rail)
    are admin-only — hidden until the "aloha" key sequence + switch enable them. */
 body:not(.admin-debug) #pose-overlay,
-body:not(.admin-debug) #pose-status {
+body:not(.admin-debug) #debug-left,
+body:not(.admin-debug) #brand-panel {
   display: none;
 }
 
-#pose-status {
+#debug-left {
   position: absolute;
   top: 1.4vh;
   left: 1.6vw;
   z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.8vh;
+  pointer-events: none;
+}
+
+#pose-status,
+#pose-label {
   padding: 0.6vh 1.2vw;
   border-radius: 999px;
   background: rgba(4, 36, 58, 0.7);
@@ -188,12 +198,19 @@ button.ghost {
 
 .hidden { display: none !important; }
 
-/* Admin debug switch (top right, revealed by typing "aloha") */
-#admin-toggle {
+/* Admin debug switch + detected brands (top right, revealed by typing "aloha") */
+#admin-rail {
   position: absolute;
   top: 1.4vh;
   right: 1.6vw;
   z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1vh;
+  max-width: 28vw;
+}
+#admin-toggle {
   display: flex;
   align-items: center;
   gap: 0.8vw;
@@ -203,6 +220,42 @@ button.ghost {
   border: 1px solid rgba(233, 251, 255, 0.25);
   font-size: 1.6vh;
   letter-spacing: 0.04em;
+}
+#brand-panel {
+  min-width: 16vw;
+  padding: 1vh 1.2vw 1.2vh;
+  border-radius: 16px;
+  background: rgba(4, 36, 58, 0.75);
+  border: 1px solid rgba(233, 251, 255, 0.25);
+}
+.brand-panel__title {
+  font-size: 1.3vh;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  margin-bottom: 0.7vh;
+}
+#brand-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5vh 0.5vw;
+}
+.brand-chip {
+  padding: 0.35vh 0.8vw;
+  border-radius: 999px;
+  font-size: 1.5vh;
+  letter-spacing: 0.03em;
+  background: rgba(233, 251, 255, 0.12);
+  border: 1px solid rgba(233, 251, 255, 0.28);
+}
+.brand-chip--brand {
+  background: rgba(55, 195, 184, 0.22);
+  border-color: rgba(55, 195, 184, 0.55);
+}
+.brand-empty {
+  font-size: 1.4vh;
+  opacity: 0.65;
 }
 .switch {
   position: relative;

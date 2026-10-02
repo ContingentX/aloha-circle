@@ -8,7 +8,10 @@
 <body>
   <video id="camera" autoplay playsinline muted></video>
   <canvas id="pose-overlay"></canvas>
-  <div id="pose-status">pose: starting…</div>
+  <div id="debug-left">
+    <div id="pose-status">pose: starting…</div>
+    <div id="pose-label">no pose</div>
+  </div>
 
   <div id="overlay">
     <header id="stage-header">
@@ -43,12 +46,18 @@
 
   <div id="save-status" class="hidden"></div>
 
-  <div id="admin-toggle" class="hidden">
-    <span>Debug</span>
-    <label class="switch">
-      <input type="checkbox" id="admin-debug-switch" />
-      <span class="slider"></span>
-    </label>
+  <div id="admin-rail">
+    <div id="admin-toggle" class="hidden">
+      <span>Debug</span>
+      <label class="switch">
+        <input type="checkbox" id="admin-debug-switch" />
+        <span class="slider"></span>
+      </label>
+    </div>
+    <aside id="brand-panel">
+      <div class="brand-panel__title">Detected</div>
+      <div id="brand-list"><span class="brand-empty">no labels yet</span></div>
+    </aside>
   </div>
 
   <div id="camera-error" class="hidden">

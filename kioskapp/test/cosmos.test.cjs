@@ -6,7 +6,7 @@ delete process.env.COSMOS_NIM_URL;
 delete process.env.COSMOS_API_KEY;
 delete process.env.NVIDIA_API_KEY;
 
-const { judgeGesture, parseConfidence, yes } = require('../src/cosmos.cjs');
+const { judgeGesture, describeScene, parseConfidence, yes } = require('../src/cosmos.cjs');
 
 const SAMPLE_IMAGE = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
 const SAMPLE_PROMPT = 'Is the person covering their eyes? Answer YES or NO only.';
@@ -236,6 +236,37 @@ test('cosmos judge sends correct request payload', async (t) => {
     assert.equal(capturedBody.messages[0].content[0].image_url.url, SAMPLE_IMAGE);
     assert.equal(capturedBody.messages[0].content[1].type, 'text');
     assert.equal(capturedHeaders.Authorization, 'Bearer test-api-key');
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
+test('describeScene is a no-op without COSMOS_NIM_URL', async () => {
+  const result = await describeScene(SAMPLE_IMAGE, 'list brands');
+  assert.equal(result.ok, false);
+  assert.equal(result.source, 'unset');
+});
+
+test('describeScene returns the VLM text without YES/NO parsing', async (t) => {
+  const mockFetch = t.mock.fn(async (_url, opts) => {
+    const body = JSON.parse(opts.body);
+    assert.equal(body.max_tokens, 256);
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: '[{"name":"NVIDIA","kind":"brand"}]' } }],
+      }),
+    };
+  });
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = mockFetch;
+  try {
+    const result = await describeScene(SAMPLE_IMAGE, 'list brands', {
+      endpoint: 'http://localhost:8000/v1/chat/completions',
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.source, 'cosmos');
+    assert.match(result.text, /NVIDIA/);
   } finally {
     globalThis.fetch = origFetch;
   }

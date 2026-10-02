@@ -1,7 +1,7 @@
 const { app, BrowserWindow, session, ipcMain } = require('electron');
 const path = require('path');
 const { askReasoner } = require('./src/reasoning.cjs');
-const { judgeGesture } = require('./src/cosmos.cjs');
+const { judgeGesture, describeScene } = require('./src/cosmos.cjs');
 const { saveRecordingAndUpload } = require('./src/recordings.cjs');
 const { vastConfigFromEnv, uploadToVast, triggerVssSync } = require('./src/vastUpload.cjs');
 const { queueRecap } = require('./src/recap.cjs');
@@ -55,6 +55,9 @@ app.whenReady().then(() => {
   ipcMain.handle('reasoning:ask', (_e, prompt) => askReasoner(prompt));
   ipcMain.handle('cosmos:judge', (_e, imageDataUrl, prompt) =>
     judgeGesture(imageDataUrl, prompt)
+  );
+  ipcMain.handle('cosmos:describe', (_e, imageDataUrl, prompt) =>
+    describeScene(imageDataUrl, prompt)
   );
   // Completed ritual recordings: saved locally, uploaded to the team-18 VAST
   // bucket + VSS search when VAST_S3_* / VSS_* env vars are set.

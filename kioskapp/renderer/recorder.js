@@ -22,11 +22,29 @@ export function createSessionRecorder() {
       startedAt: new Date(startedAt).toISOString(),
       kiosk: 'breath-of-aloha',
       stages: [],
+      labels: [],
     };
   }
 
   function mark(stageId) {
     if (meta) meta.stages.push({ id: stageId, atMs: Date.now() - startedAt });
+  }
+
+  function noteLabels(items) {
+    if (!meta || !Array.isArray(items)) return;
+    const seen = new Set(meta.labels.map((item) => String(item.name || '').toLowerCase()));
+    for (const item of items) {
+      const name = String(item && item.name ? item.name : '').trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      meta.labels.push({
+        name,
+        kind: item.kind === 'brand' ? 'brand' : 'label',
+        atMs: Date.now() - startedAt,
+      });
+    }
   }
 
   function active() {
@@ -66,5 +84,5 @@ export function createSessionRecorder() {
     });
   }
 
-  return { begin, mark, active, reachedStage, discard, finish };
+  return { begin, mark, noteLabels, active, reachedStage, discard, finish };
 }
