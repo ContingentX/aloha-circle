@@ -81,4 +81,5 @@ export const EXPERIENCES = [
   { id: 'lei-workshop', short: 'Lei Making', title: 'Fresh-flower lei making workshop' },
   { id: 'shave-ice', short: 'Shave Ice', title: 'Shave ice crawl through Pāʻia town' },
   { id: 'ukulele', short: 'ʻUkulele Hour', title: 'Group ʻukulele lesson on the beach' },
+  { id: 'heli-tour', short: 'Heli Tour', title: 'Maui helicopter tour over the valley' },
 ];
