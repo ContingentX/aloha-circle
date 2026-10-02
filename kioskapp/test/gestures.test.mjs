@@ -121,14 +121,62 @@ test('low-score wrists do not trigger a blessing', () => {
   assert.equal(isHandsOverEyes(kp), false);
 });
 
-test('dwell tracker needs consecutive frames and resets on a miss', () => {
+test('dwell tracker decays on a missed frame instead of resetting', () => {
   const dwell = createDwellTracker({ frames: 3 });
-  assert.equal(dwell.tick('hands_over_eyes'), null);
-  assert.equal(dwell.tick('hands_over_eyes'), null);
-  assert.equal(dwell.tick(null), null);
-  assert.equal(dwell.tick('hands_over_eyes'), null);
-  assert.equal(dwell.tick('hands_over_eyes'), null);
-  assert.equal(dwell.tick('hands_over_eyes'), 'hands_over_eyes');
+  assert.equal(dwell.tick('hands_over_eyes'), null); // 1
+  assert.equal(dwell.tick('hands_over_eyes'), null); // 2
+  assert.equal(dwell.tick(null), null); // decay -> 1
+  assert.equal(dwell.tick('hands_over_eyes'), null); // 2
+  assert.equal(dwell.tick('hands_over_eyes'), 'hands_over_eyes'); // 3 fires
+});
+
+test('dwell tracker drains to zero over sustained misses', () => {
+  const dwell = createDwellTracker({ frames: 3 });
+  dwell.tick('hands_over_eyes');
+  dwell.tick('hands_over_eyes');
+  dwell.tick(null);
+  dwell.tick(null);
+  assert.equal(dwell.progress('hands_over_eyes'), 0);
+});
+
+test('hands_over_eyes still fires when the covered eyes are untracked', () => {
+  const kp = standing();
+  kp[KP.leftEye] = null; // palms hide the eye keypoints themselves
+  kp[KP.rightEye] = null;
+  kp[KP.leftWrist] = { x: 310, y: 115, score: 0.25 }; // occlusion-degraded scores
+  kp[KP.rightWrist] = { x: 330, y: 115, score: 0.25 };
+  assert.equal(isHandsOverEyes(kp), true);
+});
+
+test('hands_over_ears still fires when palms hide the ear keypoints', () => {
+  const kp = standing();
+  kp[KP.leftEar] = null;
+  kp[KP.rightEar] = null;
+  kp[KP.leftEye] = null;
+  kp[KP.rightEye] = null;
+  kp[KP.leftWrist] = { x: 275, y: 115, score: 0.9 };
+  kp[KP.rightWrist] = { x: 365, y: 115, score: 0.9 };
+  assert.equal(isHandsOverEars(kp), true);
+});
+
+test('hand_near_nose still fires when the touch hides the nose', () => {
+  const kp = standing();
+  kp[KP.nose] = null;
+  kp[KP.rightWrist] = { x: 322, y: 110, score: 0.9 };
+  assert.equal(isHandNearNose(kp), true);
+});
+
+test('hands_on_heart fires when stacking occludes one wrist', () => {
+  const kp = standing();
+  kp[KP.leftWrist] = null; // hidden under the stacked hand
+  kp[KP.rightWrist] = { x: 320, y: 255, score: 0.9 };
+  assert.equal(isHandsOnHeart(kp), true);
+  assert.equal(classifyGesture(kp, VIDEO).event, 'hands_on_heart');
+});
+
+test('hands at the sides never read as hands_on_heart', () => {
+  const kp = standing(); // wrists hang at y=360, below the chest band
+  assert.equal(isHandsOnHeart(kp), false);
 });
 
 // ---------------------------------------------------------------------------
