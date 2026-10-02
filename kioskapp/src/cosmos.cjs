@@ -11,28 +11,54 @@
 //
 // Export COSMOS_NIM_URL (e.g. http://127.0.0.1:8000/v1/chat/completions) and
 // optionally COSMOS_API_KEY / COSMOS_MODEL. Unset → { ok:false, source:'unset' }.
+//
+// Timeout handling: venue Wi-Fi is unreliable; if the VLM call times out (default
+// 5s), the result degrades to { ok:false, source:'timeout' } so the kiosk falls
+// back to keypoint-only advancement.
+//
+// See COSMOS-NIM.md for CoreWeave / local NIM setup instructions.
 
 const ENDPOINT = process.env.COSMOS_NIM_URL || '';
 const MODEL = process.env.COSMOS_MODEL || 'nvidia/cosmos3-nano-reasoner';
 const API_KEY = process.env.COSMOS_API_KEY || process.env.NVIDIA_API_KEY || '';
+const TIMEOUT_MS = Number(process.env.COSMOS_TIMEOUT_MS) || 5000;
 
 function yes(text) {
   const t = String(text || '').trim().toUpperCase();
   return t.startsWith('YES') || /\bYES\b/.test(t);
 }
 
-async function judgeGesture(imageDataUrl, prompt) {
-  if (!ENDPOINT) return { ok: false, source: 'unset' };
+function parseConfidence(text) {
+  const match = String(text || '').match(/(\d{1,3})%/);
+  if (match) return Math.min(100, Math.max(0, Number(match[1]))) / 100;
+  if (/\bnot\s+(confident|certain|sure)\b/i.test(text)) return 0.4;
+  if (/\b(very\s+)?(confident|certain|sure)\b/i.test(text)) return 0.9;
+  return null;
+}
+
+async function judgeGesture(imageDataUrl, prompt, options = {}) {
+  const endpoint = options.endpoint ?? ENDPOINT;
+  const model = options.model ?? MODEL;
+  const apiKey = options.apiKey ?? API_KEY;
+  const timeoutMs = options.timeoutMs ?? TIMEOUT_MS;
+
+  if (!endpoint) return { ok: false, source: 'unset' };
   if (!imageDataUrl || !prompt) return { ok: false, source: 'bad-input' };
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     const headers = { 'Content-Type': 'application/json' };
-    if (API_KEY) headers.Authorization = `Bearer ${API_KEY}`;
-    const res = await fetch(ENDPOINT, {
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers,
+      signal: controller.signal,
       body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 16,
+        model,
+        max_tokens: 64,
         messages: [
           {
             role: 'user',
@@ -44,14 +70,32 @@ async function judgeGesture(imageDataUrl, prompt) {
         ],
       }),
     });
+
+    clearTimeout(timeoutId);
+
     if (!res.ok) throw new Error(`cosmos ${res.status}`);
     const json = await res.json();
     const text = json.choices?.[0]?.message?.content || '';
-    return { ok: yes(text), source: 'cosmos', text: String(text).trim() };
+    const trimmedText = String(text).trim();
+    const confidence = parseConfidence(trimmedText);
+
+    return {
+      ok: yes(trimmedText),
+      source: 'cosmos',
+      text: trimmedText,
+      ...(confidence !== null && { confidence }),
+    };
   } catch (err) {
+    clearTimeout(timeoutId);
+
+    if (err.name === 'AbortError') {
+      console.error('cosmos judge timeout after', timeoutMs, 'ms');
+      return { ok: false, source: 'timeout', error: 'Request timed out' };
+    }
+
     console.error('cosmos judge fallback:', err.message);
     return { ok: false, source: 'error', error: err.message };
   }
 }
 
-module.exports = { judgeGesture };
+module.exports = { judgeGesture, parseConfidence, yes };

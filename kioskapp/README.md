@@ -74,6 +74,30 @@ export VSS_PASSWORD=…
 Without the env vars the kiosk keeps local copies only — nothing is lost, and
 the upload path (`src/vastUpload.cjs`, dependency-free SigV4) is unit-tested.
 
+## Cosmos 3 Reasoner NIM (gesture VLM judge)
+
+`src/cosmos.cjs` calls NVIDIA Cosmos 3 Reasoner NIM for a second-opinion VLM
+judgment when a gesture stage stalls (~8s). This is not the live detector —
+MoveNet handles realtime pose at 10 fps. Cosmos is the fallback "physical-AI"
+reasoner.
+
+```bash
+# Option 1: NVIDIA API Catalog (cloud, quickest to test)
+export COSMOS_NIM_URL=https://integrate.api.nvidia.com/v1/chat/completions
+export COSMOS_API_KEY=nvapi-XXXXXXXX  # from https://build.nvidia.com
+
+# Option 2: Self-hosted NIM on CoreWeave / local GPU
+export COSMOS_NIM_URL=http://<coreweave-ip>:8000/v1/chat/completions
+# No API key needed for self-hosted NIM
+```
+
+**Graceful degradation**: If `COSMOS_NIM_URL` is unset, the request times out
+(default 5s), or the network fails, the kiosk falls back to keypoint-only
+advancement. No crash, no hang — the visitor experience continues.
+
+See [COSMOS-NIM.md](./COSMOS-NIM.md) for full setup instructions including
+CoreWeave GPU instances, Jetson/local deployment, and troubleshooting.
+
 ## Pose detection
 
 Live in `renderer/pose.js` (MoveNet Lightning via TF.js) with deterministic
@@ -83,10 +107,55 @@ welcome; leaning into the camera starts the 5s honi hold; Kanaloa's card slides
 aside when your face overlaps it.
 
 Optional **Cosmos 3 Reasoner NIM** (`COSMOS_NIM_URL`) is a second-opinion VLM
-if a gesture stage stalls ~8s — it is not the live detector. See `PLAN.md`.
+if a gesture stage stalls ~8s — it is not the live detector. See
+[COSMOS-NIM.md](./COSMOS-NIM.md) for CoreWeave / local NIM setup instructions.
+
+## Post-Mahalo recap reel (Cosmos Generator NIM)
+
+After Mahalo, the kiosk generates a short stylized recap clip of the visitor's
+ritual journey. This runs asynchronously — the next visitor can start
+immediately. Output is saved alongside the session recording so the existing
+VAST uploader ships it to the gallery.
+
+### Configuration
 
 ```bash
-cd kioskapp && npm test   # gesture predicates + cosmos no-op hook
+export COSMOS_GEN_URL=http://localhost:8000/v1/generate   # or NIM endpoint
+# Optional:
+export COSMOS_GEN_MODE=openai      # 'openai' (default) or 'nim'
+export COSMOS_GEN_MODEL=nvidia/cosmos-generator-i2v
+export COSMOS_API_KEY=...          # or NVIDIA_API_KEY
+```
+
+### Endpoint modes
+
+**OpenAI-compatible (default):** POST JSON to `COSMOS_GEN_URL`
+
+```json
+{
+  "model": "nvidia/cosmos-generator-i2v",
+  "prompt": "Create a gentle, warm highlight reel...",
+  "images": ["data:image/jpeg;base64,..."],
+  "duration_seconds": 14,
+  "fps": 24
+}
+```
+
+Response: `{ "video": "data:video/mp4;base64,..." }` or
+`{ "data": [{ "b64_video": "..." }] }`
+
+**NIM-native (`COSMOS_GEN_MODE=nim`):** POST multipart/form-data with
+`images[]`, `prompt`, `num_frames`, `fps`. Response: binary MP4 or
+`{ "video_base64": "..." }`.
+
+### Fallback
+
+Without `COSMOS_GEN_URL` or on API error, the kiosk falls back to a plain
+ffmpeg-concatenated highlight (one ~2s slice per stage) — there's always a
+shareable artifact. Requires `ffmpeg` in PATH.
+
+```bash
+cd kioskapp && npm test   # gesture predicates + cosmos no-op hook + recap tests
 ```
 
 ## Regenerating Kanaloa's clips

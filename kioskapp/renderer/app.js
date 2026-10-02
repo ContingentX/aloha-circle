@@ -181,6 +181,12 @@ async function finalizeSession() {
         ? 'Mahalo! Your session video is on its way to the Aloha Circle gallery.'
         : 'Mahalo! Your session video was saved on this kiosk.'
     );
+
+    if (result.saved && typeof window.kiosk?.queueRecap === 'function') {
+      window.kiosk.queueRecap(result.saved, meta).catch((err) => {
+        console.warn('[recap] queue failed:', err);
+      });
+    }
   } catch (err) {
     console.warn('[recording] save failed:', err);
     showSaveStatus('');
