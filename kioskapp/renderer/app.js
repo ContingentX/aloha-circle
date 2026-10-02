@@ -6,6 +6,9 @@ import { createSessionRecorder } from './recorder.js';
 import { createAvatarPlacer, applyPlacement } from './avatarPlacement.js';
 import { initAdminMode } from './adminMode.js';
 import { initBrandPanel } from './brandPanel.js';
+import { LOCALS, EXPERIENCES } from './matchData.js';
+import { pickMatch } from './matching.js';
+import { buildWheelSvg, spinOutcome, createGrabSpinGesture } from './wheel.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -25,6 +28,21 @@ const els = {
   progress: $('progress'),
   cameraError: $('camera-error'),
   saveStatus: $('save-status'),
+  wheelArea: $('wheel-area'),
+  wheelSvg: $('wheel-svg'),
+  wheelHint: $('wheel-hint'),
+  matchCard: $('match-card'),
+  matchPhoto: $('match-photo'),
+  matchInitial: $('match-initial'),
+  matchName: $('match-name'),
+  matchBlurb: $('match-blurb'),
+  matchReasons: $('match-reasons'),
+  matchPrize: $('match-prize'),
+  claimForm: $('claim-form'),
+  claimEmail: $('claim-email'),
+  claimQr: $('claim-qr'),
+  claimQrWrap: $('claim-qr-wrap'),
+  claimDone: $('claim-done'),
 };
 
 const startStage = new URLSearchParams(location.search).get('stage');
@@ -95,6 +113,7 @@ async function startCamera() {
 function onPoseEvent(payload) {
   if (payload && payload.type === 'pose') {
     updateAvatarPlacement(payload.person, payload.video);
+    feedWheelGesture(payload);
     liveLabels = [];
     if (payload.person) liveLabels.push('person');
     if (payload.event) liveLabels.push(payload.event);
@@ -221,9 +240,11 @@ function cancelHold() {
 // saved only if they reached mahalo (abandoned runs are discarded).
 function trackSession(stage) {
   if (stage.id === 'attract') {
-    if (!recorder.active()) return;
-    if (recorder.reachedStage('mahalo')) finalizeSession();
-    else recorder.discard();
+    if (recorder.active()) {
+      if (recorder.reachedStage('mahalo')) finalizeSession();
+      else recorder.discard();
+    }
+    resetMatchFlow();
     return;
   }
   if (!recorder.active() && cameraStream) recorder.begin(cameraStream);
@@ -231,6 +252,13 @@ function trackSession(stage) {
 }
 
 async function finalizeSession() {
+  // Snapshot before any await — trackSession resets the match flow right
+  // after calling us, while we are still waiting on the recorder.
+  const wheel = wheelResult;
+  const match = matchResult
+    ? { localId: matchResult.local.id, score: matchResult.score, reasons: matchResult.reasons }
+    : null;
+  const claim = claimInfo;
   try {
     showSaveStatus('Saving your Breath of Aloha video…');
     if (recorder.active()) {
@@ -241,6 +269,11 @@ async function finalizeSession() {
     }
     const { blob, meta } = await recorder.finish();
     if (brandReport) meta.brandReport = brandReport;
+    if (wheel) meta.wheel = wheel;
+    if (match) meta.match = match;
+    // Claim email stays in the local sidecar only — recordings.cjs uploads
+    // the video, never the JSON, so visitor PII does not leave the kiosk.
+    if (claim) meta.claim = claim;
     const result = await window.kiosk.saveRecording(await blob.arrayBuffer(), meta);
     console.log('[recording]', result);
     showSaveStatus(
@@ -269,6 +302,151 @@ function showSaveStatus(text) {
   if (text) saveStatusTimer = setTimeout(() => els.saveStatus.classList.add('hidden'), 12000);
 }
 
+// ---- wheel of aloha ---------------------------------------------------------
+// Spun by the grab-and-pull gesture (wrist tracked by the same pose loop as
+// the ritual) or the Spin button. Landing picks the sponsor experience.
+const wheelGesture = createGrabSpinGesture();
+let wheelAngle = 0;
+let wheelSpinning = false;
+let wheelResult = null;
+let matchResult = null;
+let claimInfo = null;
+let claimNonce = null;
+
+function currentStage() {
+  return STAGES[stageIndex];
+}
+
+function feedWheelGesture(payload) {
+  if (currentStage().kind !== 'wheel' || wheelSpinning || wheelResult) return;
+  const fired = wheelGesture.feed(payload.keypoints, payload.video);
+  if (!fired) return;
+  if (fired.type === 'grab') {
+    els.wheelArea.classList.add('grabbed');
+    els.wheelHint.textContent = 'Got it — now pull down fast!';
+    return;
+  }
+  if (fired.type === 'spin') spinWheel(fired.velocity, 'gesture');
+}
+
+function spinWheel(velocity, source) {
+  if (wheelSpinning || wheelResult) return;
+  wheelSpinning = true;
+  els.wheelArea.classList.remove('grabbed');
+  els.wheelArea.classList.add('spinning');
+  els.wheelHint.textContent = '';
+  els.next.disabled = true;
+
+  const outcome = spinOutcome(velocity, { segments: EXPERIENCES.length, startAngle: wheelAngle });
+  wheelAngle = outcome.finalAngle;
+  const rotor = els.wheelSvg.querySelector('#wheel-rotor');
+  if (rotor) {
+    // easeOutQuad ≈ constant deceleration, matching spinOutcome's physics.
+    rotor.style.transition = `transform ${outcome.durationMs}ms cubic-bezier(0.25, 0.46, 0.45, 0.94)`;
+    rotor.style.transform = `rotate(${outcome.finalAngle}deg)`;
+  }
+  setTimeout(() => {
+    const experience = EXPERIENCES[outcome.index];
+    wheelResult = { experienceId: experience.id, title: experience.title, velocity, source };
+    els.wheelHint.textContent = `\u{1F33A} ${experience.title}!`;
+    els.next.disabled = false;
+    wheelSpinning = false;
+    setTimeout(() => {
+      if (currentStage().kind === 'wheel') advance();
+    }, 1600);
+  }, outcome.durationMs + 120);
+}
+
+function renderWheelStage(active) {
+  els.wheelArea.classList.toggle('hidden', !active);
+  if (!active) return;
+  if (!els.wheelSvg.innerHTML) els.wheelSvg.innerHTML = buildWheelSvg(EXPERIENCES);
+  wheelGesture.reset();
+  // The hint pill is the live coach line; the footer instruction would sit
+  // right under it and double it, so the wheel stage leaves the footer empty.
+  els.instruction.textContent = '';
+  if (!wheelResult) {
+    els.wheelHint.textContent = 'Reach up ↑ grab the top of the wheel, then pull down fast!';
+  }
+}
+
+// ---- match reveal + claim ---------------------------------------------------
+function renderMatchStage(active) {
+  els.matchCard.classList.toggle('hidden', !active);
+  if (!active) return;
+  // The card is self-explanatory; the footer line would run underneath it.
+  els.instruction.textContent = '';
+  if (!matchResult) {
+    matchResult = pickMatch(brandReport, LOCALS, {
+      seed: Math.floor(Math.random() * LOCALS.length),
+    });
+  }
+  if (!matchResult) return;
+  const { local, reasons } = matchResult;
+
+  els.matchName.textContent = local.name;
+  els.matchBlurb.textContent = local.blurb;
+  els.matchInitial.textContent = local.name[0] || '?';
+  els.matchPhoto.classList.remove('hidden');
+  els.matchPhoto.onerror = () => els.matchPhoto.classList.add('hidden');
+  els.matchPhoto.src = `${MEDIA_BASE}/locals/${local.id}.jpg`;
+
+  els.matchReasons.textContent = '';
+  const lines = reasons.length ? reasons : ['a fresh connection — no shared brands needed'];
+  for (const reason of lines) {
+    const li = document.createElement('li');
+    li.textContent = reason;
+    els.matchReasons.appendChild(li);
+  }
+  els.matchPrize.textContent = wheelResult
+    ? `You won: ${wheelResult.title} — together with ${local.name}`
+    : `An experience to share with ${local.name}`;
+
+  claimNonce = claimNonce || crypto.randomUUID().slice(0, 8);
+  const claimUrl =
+    'https://aloha-circle.com/claim' +
+    `?x=${claimNonce}&e=${wheelResult?.experienceId || 'aloha'}&l=${local.id}`;
+  // QR lib (qrcodejs) loads from CDN; if venue Wi-Fi dropped it, degrade to
+  // the email path quietly.
+  if (typeof window.QRCode === 'function') {
+    els.claimQr.textContent = '';
+    new window.QRCode(els.claimQr, { text: claimUrl, width: 110, height: 110 });
+    els.claimQrWrap.classList.remove('hidden');
+  } else {
+    els.claimQrWrap.classList.add('hidden');
+  }
+}
+
+els.claimForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const email = els.claimEmail.value.trim();
+  if (!email) return;
+  claimInfo = {
+    email,
+    nonce: claimNonce,
+    experienceId: wheelResult?.experienceId || null,
+    localId: matchResult?.local?.id || null,
+    at: new Date().toISOString(),
+  };
+  els.claimForm.classList.add('hidden');
+  els.claimDone.textContent = `Mahalo! We’ll email your prize details to ${email}.`;
+  els.claimDone.classList.remove('hidden');
+});
+
+function resetMatchFlow() {
+  wheelGesture.reset();
+  wheelSpinning = false;
+  wheelResult = null;
+  matchResult = null;
+  claimInfo = null;
+  claimNonce = null;
+  els.next.disabled = false;
+  els.wheelArea.classList.remove('grabbed', 'spinning');
+  els.claimEmail.value = '';
+  els.claimForm.classList.remove('hidden');
+  els.claimDone.classList.add('hidden');
+}
+
 // ---- stage machine --------------------------------------------------------
 function renderStage() {
   const stage = STAGES[stageIndex];
@@ -284,8 +462,10 @@ function renderStage() {
   els.next.textContent = stage.button || 'Next';
 
   els.back.classList.toggle('hidden', stageIndex === 0);
-  els.skip.classList.toggle('hidden', !['hold', 'gesture', 'avatar'].includes(stage.kind));
+  els.skip.classList.toggle('hidden', !['hold', 'gesture', 'avatar', 'wheel', 'match'].includes(stage.kind));
 
+  renderWheelStage(stage.kind === 'wheel');
+  renderMatchStage(stage.kind === 'match');
   playClip(stage.kind === 'attract' ? null : stage.clip);
 
   els.progress.innerHTML = STAGES.map((s, i) =>
@@ -307,6 +487,9 @@ els.next.addEventListener('click', () => {
   if (stage.kind === 'hold') {
     // Button still simulates the forehead touch when the detector misses.
     startHold(stage.holdSeconds, advance);
+  } else if (stage.kind === 'wheel' && !wheelResult) {
+    // Button fallback when the grab gesture misses — random brisk pull.
+    spinWheel(600 + Math.random() * 500, 'button');
   } else {
     advance();
   }
