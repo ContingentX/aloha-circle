@@ -5,4 +5,5 @@ contextBridge.exposeInMainWorld('kiosk', {
   judgeGesture: (imageDataUrl, prompt) =>
     ipcRenderer.invoke('cosmos:judge', imageDataUrl, prompt),
   saveRecording: (buffer, meta) => ipcRenderer.invoke('recording:save', buffer, meta),
+  queueRecap: (videoPath, meta) => ipcRenderer.invoke('recap:generate', videoPath, meta),
 });

@@ -3,6 +3,7 @@ const path = require('path');
 const { askReasoner } = require('./src/reasoning.cjs');
 const { judgeGesture } = require('./src/cosmos.cjs');
 const { saveRecordingAndUpload } = require('./src/recordings.cjs');
+const { queueRecap } = require('./src/recap.cjs');
 
 const KIOSK = process.argv.includes('--kiosk');
 
@@ -59,6 +60,22 @@ app.whenReady().then(() => {
   ipcMain.handle('recording:save', (_e, buffer, meta) =>
     saveRecordingAndUpload(Buffer.from(buffer), meta)
   );
+
+  // Post-Mahalo recap reel: queued async, doesn't block the kiosk loop.
+  // Takes the saved video path + meta; generates a recap clip next to it.
+  // The existing uploader (from saveRecordingAndUpload) will ship it to VAST.
+  ipcMain.handle('recap:generate', (_e, videoPath, meta) => {
+    queueRecap(videoPath, meta)
+      .then((result) => {
+        if (result.path) {
+          console.log('[recap] generated:', result.path, 'source:', result.source);
+        } else {
+          console.warn('[recap] no output:', result.source, result.error || '');
+        }
+      })
+      .catch((err) => console.error('[recap] error:', err.message));
+    return { queued: true };
+  });
 
   createWindow();
 });
