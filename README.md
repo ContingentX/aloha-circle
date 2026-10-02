@@ -13,6 +13,7 @@ See [PLANFILE.md](PLANFILE.md) for the full plan.
 | [`/www`](www) | Vite + React website (static build → S3 behind aloha-circle.com) |
 | [`/app`](app) | Expo / React Native mobile app |
 | [`/agentharness`](agentharness) | The Aloha Agent: API, continuous Maui Needs Index ingest, matcher |
+| [`/kioskapp`](kioskapp) | Electron kiosk for the Aloha Circle screens: the Breath of Aloha ritual |
 
 ## Quickstart
 
@@ -33,6 +34,14 @@ cd app && npm install && npx expo start
 LAN binding is only for the visitor-facing API. The MCP endpoint and `/api/agent/*` control surface remain loopback-only even when `ALOHALIVE_HOST=0.0.0.0` is set.
 
 Sign up as a visitor on the site — you'll get an instant match against the seeded locals/causes. The harness re-ingests CauseSignals continuously from `agentharness/src/sources.json`.
+
+## Kiosk: the Breath of Aloha (`/kioskapp`)
+
+The physical Aloha Circle runs an Electron kiosk ([VAST Builders Challenge](https://tokensand.com/vastsf) build): visitors complete the guided ritual with Kanaloa (camera-tracked gestures: honi ihu forehead hold, eyes, ears, nose, heart), then spin the **Wheel of Aloha** with a grab-and-pull gesture to win a sponsor experience, and meet the local whose style best matches theirs — claimed by email or QR. Pose runs on MoveNet/RF-DETR; a sponsor VLM (W&B Inference by CoreWeave) reads brands/style/colors for the match and backstops stalled gestures; finished sessions upload to VAST S3 and ingest into VSS search.
+
+Live run from the hackathon floor — match stage with the admin Detected rail open (type `aloha` to toggle):
+
+![Kiosk match stage: Your Aloha Match card with brand-matched local, won experience, QR claim, and the live Detected brands rail](docs/kiosk-match-stage.jpg)
 
 ## TrueForge vertical slice
 
