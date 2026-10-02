@@ -4,6 +4,10 @@
 
 export const MIN_SCORE = 0.3;
 
+// Wrists get a lower bar: raising hands to the face drops MoveNet's wrist
+// confidence right when the ritual gestures need them most.
+export const WRIST_MIN_SCORE = 0.2;
+
 export const KP = {
   nose: 0,
   leftEye: 1,
@@ -172,10 +176,31 @@ export function isForeheadTouch(kp, video) {
   return box.h / video.height > 0.42 || box.area / (video.width * video.height) > 0.18;
 }
 
+function wristPt(kp, i) {
+  const k = kp[i];
+  if (!k || k.score < WRIST_MIN_SCORE || !Number.isFinite(k.x) || !Number.isFinite(k.y)) return null;
+  return k;
+}
+
 function bothWrists(kp) {
-  const lw = pt(kp, KP.leftWrist);
-  const rw = pt(kp, KP.rightWrist);
+  const lw = wristPt(kp, KP.leftWrist);
+  const rw = wristPt(kp, KP.rightWrist);
   return lw && rw ? [lw, rw] : null;
+}
+
+// Best available face anchor. Touching the face usually occludes the exact
+// keypoint being blessed (eyes, nose), so every face predicate needs a
+// fallback anchor rather than failing when its target keypoint disappears.
+function faceMid(kp) {
+  const le = pt(kp, KP.leftEye);
+  const re = pt(kp, KP.rightEye);
+  if (le && re) return { x: (le.x + re.x) / 2, y: (le.y + re.y) / 2 };
+  const nose = pt(kp, KP.nose);
+  if (nose) return { x: nose.x, y: nose.y };
+  const la = pt(kp, KP.leftEar);
+  const ra = pt(kp, KP.rightEar);
+  if (la && ra) return { x: (la.x + ra.x) / 2, y: (la.y + ra.y) / 2 };
+  return null;
 }
 
 function wristsNear(wrists, leftTarget, rightTarget, radius) {
@@ -188,32 +213,45 @@ function wristsNear(wrists, leftTarget, rightTarget, radius) {
 
 export function isHandsOverEyes(kp) {
   const wrists = bothWrists(kp);
-  const le = pt(kp, KP.leftEye);
-  const re = pt(kp, KP.rightEye);
-  if (!wrists || !le || !re) return false;
-  // Clustered at the face center — tighter than ears so the two blessings don't collide.
-  const mid = { x: (le.x + re.x) / 2, y: (le.y + re.y) / 2 };
+  const mid = faceMid(kp);
+  if (!wrists || !mid) return false;
   const scale = shoulderWidth(kp) || 80;
-  return wrists.every((w) => dist(w, mid) < scale * 0.32);
+  const [lw, rw] = wrists;
+  // Clustered at the face center. Spread wrists belong to the ears blessing —
+  // wrist separation, not eye visibility, is what keeps the two apart.
+  if (dist(lw, rw) > scale * 0.5) return false;
+  return wrists.every((w) => dist(w, mid) < scale * 0.45);
 }
 
 export function isHandsOverEars(kp) {
   if (isHandsOverEyes(kp)) return false;
   const wrists = bothWrists(kp);
+  if (!wrists) return false;
+  const scale = shoulderWidth(kp) || 80;
   const le = pt(kp, KP.leftEar) || pt(kp, KP.leftEye);
   const re = pt(kp, KP.rightEar) || pt(kp, KP.rightEye);
-  const scale = shoulderWidth(kp) || 80;
-  return wristsNear(wrists, le, re, scale * 0.5);
+  if (wristsNear(wrists, le, re, scale * 0.55)) return true;
+  // Palms over the ears hide the ear keypoints themselves: accept spread
+  // wrists flanking the face at head height.
+  const mid = faceMid(kp);
+  if (!mid) return false;
+  const [lw, rw] = wrists;
+  const flanking = (lw.x - mid.x) * (rw.x - mid.x) < 0 && dist(lw, rw) >= scale * 0.5;
+  const nearHead = wrists.every(
+    (w) => Math.abs(w.y - mid.y) < scale * 0.5 && Math.abs(w.x - mid.x) < scale * 0.8
+  );
+  return flanking && nearHead;
 }
 
 export function isHandNearNose(kp) {
-  const nose = pt(kp, KP.nose);
-  const lw = pt(kp, KP.leftWrist);
-  const rw = pt(kp, KP.rightWrist);
-  if (!nose) return false;
+  // Touching the nose often hides it — fall back to the face anchor.
+  const target = pt(kp, KP.nose) || faceMid(kp);
+  const lw = wristPt(kp, KP.leftWrist);
+  const rw = wristPt(kp, KP.rightWrist);
+  if (!target) return false;
   const scale = shoulderWidth(kp) || 80;
-  const r = scale * 0.45;
-  return (lw && dist(lw, nose) < r) || (rw && dist(rw, nose) < r);
+  const r = scale * 0.5;
+  return (lw && dist(lw, target) < r) || (rw && dist(rw, target) < r);
 }
 
 export function isHandsOnHeart(kp) {
@@ -221,9 +259,13 @@ export function isHandsOnHeart(kp) {
   const rs = pt(kp, KP.rightShoulder);
   const lh = pt(kp, KP.leftHip);
   const rh = pt(kp, KP.rightHip);
-  const lw = pt(kp, KP.leftWrist);
-  const rw = pt(kp, KP.rightWrist);
-  if (!ls || !rs || !lw || !rw) return false;
+  const lw = wristPt(kp, KP.leftWrist);
+  const rw = wristPt(kp, KP.rightWrist);
+  if (!ls || !rs) return false;
+  // Stacked hands occlude one wrist — require every *visible* wrist on the
+  // chest instead of demanding both be tracked.
+  const visible = [lw, rw].filter(Boolean);
+  if (visible.length === 0) return false;
   const minX = Math.min(ls.x, rs.x);
   const maxX = Math.max(ls.x, rs.x);
   const shoulderY = (ls.y + rs.y) / 2;
@@ -231,7 +273,7 @@ export function isHandsOnHeart(kp) {
   const top = shoulderY;
   const bottom = shoulderY + (hipY - shoulderY) * 0.55;
   const inChest = (w) => w.x >= minX && w.x <= maxX && w.y >= top && w.y <= bottom;
-  return inChest(lw) && inChest(rw);
+  return visible.every(inChest);
 }
 
 /**
@@ -260,13 +302,16 @@ export function createDwellTracker({ frames = 15 } = {}) {
   const counts = Object.create(null);
   return {
     tick(event) {
+      // A missed frame decays progress instead of zeroing it: MoveNet flickers
+      // for a frame or two mid-gesture, and a hard reset meant visitors could
+      // hold a pose forever without ever reaching the dwell threshold.
       if (!event) {
-        for (const k of Object.keys(counts)) counts[k] = 0;
+        for (const k of Object.keys(counts)) counts[k] = Math.max(0, counts[k] - 1);
         return null;
       }
       counts[event] = (counts[event] || 0) + 1;
       for (const k of Object.keys(counts)) {
-        if (k !== event) counts[k] = 0;
+        if (k !== event) counts[k] = Math.max(0, counts[k] - 1);
       }
       if (counts[event] >= frames) {
         counts[event] = 0;

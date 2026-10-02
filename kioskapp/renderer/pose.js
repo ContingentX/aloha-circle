@@ -15,7 +15,7 @@ import {
 import { createRFDETRDetector, getRoboflowInferUrl } from './rfdetr.js';
 
 const FPS_MS = 100;
-const DWELL_FRAMES = 15; // 1.5s at 10 fps
+const DWELL_FRAMES = 12; // ~1.2s at 10 fps (dwell decays on misses, see gestures.js)
 
 function videoSize(video) {
   return {
