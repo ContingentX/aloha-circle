@@ -4,6 +4,7 @@ import { createPoseDetector } from './pose.js';
 import { GESTURE_PROMPTS } from './gestures.js';
 import { createSessionRecorder } from './recorder.js';
 import { createAvatarPlacer, applyPlacement } from './avatarPlacement.js';
+import { initAdminMode } from './adminMode.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -266,5 +267,6 @@ els.back.addEventListener('click', () => {
   renderStage();
 });
 
+initAdminMode();
 startCamera();
 renderStage();
