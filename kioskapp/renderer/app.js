@@ -92,6 +92,26 @@ async function pollBrands() {
 
 // ---- camera ---------------------------------------------------------------
 async function startCamera() {
+  // ?fakecam=<media url>: deterministic camera feed for recorded takes
+  // (Chromium's fake-device switches don't engage in this Electron build).
+  const fakecam = new URLSearchParams(location.search).get('fakecam');
+  if (fakecam) {
+    try {
+      els.camera.src = fakecam;
+      els.camera.loop = true;
+      els.camera.muted = true;
+      await els.camera.play();
+      els.cameraError.classList.add('hidden');
+      pose.start(els.camera, onPoseEvent);
+      clearInterval(brandTimer);
+      brandTimer = setInterval(pollBrands, 8000);
+      pollBrands();
+    } catch (err) {
+      console.error('fakecam failed:', err);
+      els.cameraError.classList.remove('hidden');
+    }
+    return;
+  }
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { width: { ideal: 1920 }, height: { ideal: 1080 }, facingMode: 'user' },
@@ -378,6 +398,10 @@ function renderMatchStage(active) {
   // The card is self-explanatory; the footer line would run underneath it.
   els.instruction.textContent = '';
   if (!matchResult) {
+    // RECORDING STAGING (local-only): deterministic report → Kai wins.
+    if (!brandReport) {
+      brandReport = { gender: 'unknown', brands: [], clothingStyle: ['surfwear'], colors: ['blue'], accessories: [] };
+    }
     matchResult = pickMatch(brandReport, LOCALS, {
       seed: Math.floor(Math.random() * LOCALS.length),
     });
@@ -490,7 +514,8 @@ els.next.addEventListener('click', () => {
     startHold(stage.holdSeconds, advance);
   } else if (stage.kind === 'wheel' && !wheelResult) {
     // Button fallback when the grab gesture misses — random brisk pull.
-    spinWheel(600 + Math.random() * 500, 'button');
+    // RECORDING STAGING (local-only): 513.8 deg/s lands on heli-tour.
+    spinWheel(513.8, 'button');
   } else {
     advance();
   }
