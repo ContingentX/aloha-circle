@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Aloha Circle — The Breath of Aloha</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <video id="camera" autoplay playsinline muted></video>
+  <canvas id="pose-overlay"></canvas>
+  <div id="debug-left">
+    <div id="pose-status">pose: starting…</div>
+    <div id="pose-label">no pose</div>
+  </div>
+
+  <div id="overlay">
+    <header id="stage-header">
+      <div id="stage-emoji"></div>
+      <h1 id="stage-title"></h1>
+      <p id="stage-subtitle"></p>
+    </header>
+
+    <div id="avatar-card" class="hidden">
+      <video id="avatar-video" playsinline></video>
+      <div id="avatar-name">Kanaloa</div>
+    </div>
+
+    <div id="wheel-area" class="hidden">
+      <div id="wheel-pointer">&#9660;</div>
+      <svg id="wheel-svg" viewBox="0 0 400 400"></svg>
+      <div id="wheel-hint">Reach up &#8593; grab the top of the wheel, then pull down fast!</div>
+    </div>
+
+    <div id="match-card" class="hidden">
+      <div id="match-photo-wrap">
+        <img id="match-photo" alt="" />
+        <div id="match-initial"></div>
+      </div>
+      <h2 id="match-name"></h2>
+      <p id="match-blurb"></p>
+      <ul id="match-reasons"></ul>
+      <div id="match-prize"></div>
+      <form id="claim-form">
+        <input id="claim-email" type="email" placeholder="your@email.com" autocomplete="off" />
+        <button id="claim-btn" type="submit">Email my prize</button>
+      </form>
+      <div id="claim-qr-wrap">
+        <div id="claim-qr"></div>
+        <div id="claim-qr-hint">or snap this code to claim</div>
+      </div>
+      <div id="claim-done" class="hidden"></div>
+    </div>
+
+    <div id="hold-ring" class="hidden">
+      <svg viewBox="0 0 120 120">
+        <circle class="ring-bg" cx="60" cy="60" r="52" />
+        <circle class="ring-fg" cx="60" cy="60" r="52" />
+      </svg>
+      <div id="hold-count">5</div>
+    </div>
+
+    <footer id="stage-footer">
+      <p id="stage-instruction"></p>
+      <div id="controls">
+        <button id="btn-back" class="ghost">Back</button>
+        <button id="btn-next"></button>
+        <button id="btn-skip" class="ghost">Skip</button>
+      </div>
+      <div id="progress"></div>
+    </footer>
+  </div>
+
+  <div id="save-status" class="hidden"></div>
+
+  <div id="admin-rail">
+    <div id="admin-toggle" class="hidden">
+      <span>Debug</span>
+      <label class="switch">
+        <input type="checkbox" id="admin-debug-switch" />
+        <span class="slider"></span>
+      </label>
+    </div>
+    <aside id="brand-panel">
+      <div class="brand-panel__title">Detected</div>
+      <ul id="brand-list"></ul>
+    </aside>
+  </div>
+
+  <div id="camera-error" class="hidden">
+    <p>Camera unavailable — check that a webcam is connected and not in use.</p>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@4.22.0/dist/tf-core.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter@4.22.0/dist/tf-converter.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.22.0/dist/tf-backend-webgl.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3/dist/pose-detection.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs@0.0.2/qrcode.min.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

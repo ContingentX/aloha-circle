@@ -1,0 +1,4 @@
+node_modules/
+assets/clips/*.mp4
+package-lock.json
+recordings/

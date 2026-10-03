@@ -1,0 +1,87 @@
+{
+  "video": { "width": 640, "height": 480 },
+  "description": "Keypoint sequences for gesture tests. Each sequence simulates a gesture being performed over multiple frames with dwell time.",
+  "sequences": {
+    "gaze_at_screen": {
+      "description": "Person looking toward camera, face visible mid-frame, stationary for dwell",
+      "frames": [
+        { "kp": { "nose": [320, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": [230, 280], "rightElbow": [410, 280], "leftWrist": [220, 360], "rightWrist": [420, 360], "leftHip": [280, 380], "rightHip": [360, 380] } },
+        { "kp": { "nose": [321, 121], "leftEye": [301, 101], "rightEye": [341, 101], "leftEar": [281, 111], "rightEar": [361, 111], "leftShoulder": [261, 201], "rightShoulder": [381, 201], "leftElbow": [231, 281], "rightElbow": [411, 281], "leftWrist": [221, 361], "rightWrist": [421, 361], "leftHip": [281, 381], "rightHip": [361, 381] } },
+        { "kp": { "nose": [320, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": [230, 280], "rightElbow": [410, 280], "leftWrist": [220, 360], "rightWrist": [420, 360], "leftHip": [280, 380], "rightHip": [360, 380] } }
+      ],
+      "expectedEvent": "gaze_at_screen"
+    },
+    "forehead_touch": {
+      "description": "Person leaning close to camera, face fills large portion of frame",
+      "frames": [
+        { "kp": { "nose": [320, 220], "leftEye": [280, 40], "rightEye": [360, 40], "leftEar": [240, 80], "rightEar": [400, 80], "leftShoulder": [200, 350], "rightShoulder": [440, 350], "leftElbow": [180, 400], "rightElbow": [460, 400], "leftWrist": [160, 450], "rightWrist": [480, 450], "leftHip": [250, 500], "rightHip": [390, 500] } },
+        { "kp": { "nose": [322, 222], "leftEye": [282, 42], "rightEye": [362, 42], "leftEar": [242, 82], "rightEar": [402, 82], "leftShoulder": [202, 352], "rightShoulder": [442, 352], "leftElbow": [182, 402], "rightElbow": [462, 402], "leftWrist": [162, 452], "rightWrist": [482, 452], "leftHip": [252, 502], "rightHip": [392, 502] } },
+        { "kp": { "nose": [320, 220], "leftEye": [280, 40], "rightEye": [360, 40], "leftEar": [240, 80], "rightEar": [400, 80], "leftShoulder": [200, 350], "rightShoulder": [440, 350], "leftElbow": [180, 400], "rightElbow": [460, 400], "leftWrist": [160, 450], "rightWrist": [480, 450], "leftHip": [250, 500], "rightHip": [390, 500] } }
+      ],
+      "expectedEvent": "forehead_touch"
+    },
+    "hands_over_eyes": {
+      "description": "Both wrists near center of face (eyes), classic eye-covering gesture",
+      "frames": [
+        { "kp": { "nose": [320, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": [280, 160], "rightElbow": [360, 160], "leftWrist": [300, 100], "rightWrist": [340, 100], "leftHip": [280, 380], "rightHip": [360, 380] } },
+        { "kp": { "nose": [320, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": [282, 162], "rightElbow": [358, 162], "leftWrist": [302, 102], "rightWrist": [338, 102], "leftHip": [280, 380], "rightHip": [360, 380] } },
+        { "kp": { "nose": [320, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": [280, 160], "rightElbow": [360, 160], "leftWrist": [300, 100], "rightWrist": [340, 100], "leftHip": [280, 380], "rightHip": [360, 380] } }
+      ],
+      "expectedEvent": "hands_over_eyes"
+    },
+    "hands_over_ears": {
+      "description": "Both wrists near ears, classic ear-covering gesture",
+      "frames": [
+        { "kp": { "nose": [320, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": [250, 150], "rightElbow": [390, 150], "leftWrist": [280, 110], "rightWrist": [360, 110], "leftHip": [280, 380], "rightHip": [360, 380] } },
+        { "kp": { "nose": [320, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": [252, 152], "rightElbow": [388, 152], "leftWrist": [282, 112], "rightWrist": [358, 112], "leftHip": [280, 380], "rightHip": [360, 380] } },
+        { "kp": { "nose": [320, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": [250, 150], "rightElbow": [390, 150], "leftWrist": [280, 110], "rightWrist": [360, 110], "leftHip": [280, 380], "rightHip": [360, 380] } }
+      ],
+      "expectedEvent": "hands_over_ears"
+    },
+    "hand_near_nose": {
+      "description": "One wrist near nose, touching or smelling gesture",
+      "frames": [
+        { "kp": { "nose": [320, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": [230, 280], "rightElbow": [360, 180], "leftWrist": [220, 360], "rightWrist": [320, 120], "leftHip": [280, 380], "rightHip": [360, 380] } },
+        { "kp": { "nose": [320, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": [232, 282], "rightElbow": [358, 178], "leftWrist": [222, 362], "rightWrist": [322, 122], "leftHip": [280, 380], "rightHip": [360, 380] } },
+        { "kp": { "nose": [320, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": [230, 280], "rightElbow": [360, 180], "leftWrist": [220, 360], "rightWrist": [320, 120], "leftHip": [280, 380], "rightHip": [360, 380] } }
+      ],
+      "expectedEvent": "hand_near_nose"
+    },
+    "hands_on_heart": {
+      "description": "Both wrists stacked on upper chest area",
+      "frames": [
+        { "kp": { "nose": [320, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": [260, 280], "rightElbow": [380, 280], "leftWrist": [300, 250], "rightWrist": [340, 260], "leftHip": [280, 380], "rightHip": [360, 380] } },
+        { "kp": { "nose": [320, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": [262, 282], "rightElbow": [378, 282], "leftWrist": [302, 252], "rightWrist": [338, 262], "leftHip": [280, 380], "rightHip": [360, 380] } },
+        { "kp": { "nose": [320, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": [260, 280], "rightElbow": [380, 280], "leftWrist": [300, 250], "rightWrist": [340, 260], "leftHip": [280, 380], "rightHip": [360, 380] } }
+      ],
+      "expectedEvent": "hands_on_heart"
+    },
+    "transition_gaze_to_eyes": {
+      "description": "Full transition: standing → hands moving up → covering eyes, simulates real ritual flow",
+      "frames": [
+        { "kp": { "nose": [320, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": [230, 280], "rightElbow": [410, 280], "leftWrist": [220, 360], "rightWrist": [420, 360], "leftHip": [280, 380], "rightHip": [360, 380] }, "note": "standing, gaze" },
+        { "kp": { "nose": [320, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": [230, 280], "rightElbow": [410, 280], "leftWrist": [220, 360], "rightWrist": [420, 360], "leftHip": [280, 380], "rightHip": [360, 380] }, "note": "still standing, gaze" },
+        { "kp": { "nose": [320, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": [280, 160], "rightElbow": [360, 160], "leftWrist": [300, 100], "rightWrist": [340, 100], "leftHip": [280, 380], "rightHip": [360, 380] }, "note": "covering eyes" },
+        { "kp": { "nose": [320, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": [280, 160], "rightElbow": [360, 160], "leftWrist": [300, 100], "rightWrist": [340, 100], "leftHip": [280, 380], "rightHip": [360, 380] }, "note": "holding eyes" },
+        { "kp": { "nose": [320, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": [280, 160], "rightElbow": [360, 160], "leftWrist": [300, 100], "rightWrist": [340, 100], "leftHip": [280, 380], "rightHip": [360, 380] }, "note": "still holding" }
+      ],
+      "expectedEvents": ["gaze_at_screen", "gaze_at_screen", "hands_over_eyes", "hands_over_eyes", "hands_over_eyes"]
+    },
+    "noisy_hands_over_eyes": {
+      "description": "Hands over eyes with momentary jitter/loss, tests dwell reset. When wrists are lost, gesture falls back to gaze_at_screen (face still visible), which resets the hands_over_eyes dwell counter.",
+      "frames": [
+        { "kp": { "nose": [320, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": [280, 160], "rightElbow": [360, 160], "leftWrist": [300, 100], "rightWrist": [340, 100], "leftHip": [280, 380], "rightHip": [360, 380] }, "note": "covering eyes" },
+        { "kp": { "nose": [320, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": null, "rightElbow": null, "leftWrist": null, "rightWrist": null, "leftHip": [280, 380], "rightHip": [360, 380] }, "note": "wrists lost (occlusion) - falls back to gaze" },
+        { "kp": { "nose": [320, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": [280, 160], "rightElbow": [360, 160], "leftWrist": [300, 100], "rightWrist": [340, 100], "leftHip": [280, 380], "rightHip": [360, 380] }, "note": "recovered" }
+      ],
+      "expectedEvents": ["hands_over_eyes", "gaze_at_screen", "hands_over_eyes"]
+    },
+    "profile_no_gaze": {
+      "description": "Person turned to the side, nose past eyes - should NOT trigger gaze",
+      "frames": [
+        { "kp": { "nose": [400, 120], "leftEye": [300, 100], "rightEye": [340, 100], "leftEar": [280, 110], "rightEar": [360, 110], "leftShoulder": [260, 200], "rightShoulder": [380, 200], "leftElbow": [230, 280], "rightElbow": [410, 280], "leftWrist": [220, 360], "rightWrist": [420, 360], "leftHip": [280, 380], "rightHip": [360, 380] } }
+      ],
+      "expectedEvent": null
+    }
+  }
+}

@@ -1,0 +1,465 @@
+:root {
+  --ocean: #04243a;
+  --foam: #e9fbff;
+  --coral: #ff8a5c;
+  --teal: #37c3b8;
+  --sunset: #ffd166;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--ocean);
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: var(--foam);
+  user-select: none;
+}
+
+/* Mirrored camera feed fills the screen */
+#camera {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+#pose-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Pose-debug visuals (face box, keypoint dots, stacked pills, brand rail)
+   are admin-only — hidden until the "aloha" key sequence + switch enable them. */
+body:not(.admin-debug) #pose-overlay,
+body:not(.admin-debug) #debug-left,
+body:not(.admin-debug) #brand-panel {
+  display: none;
+}
+
+#debug-left {
+  position: absolute;
+  /* The gesture label is canvas-drawn at (12,12)-(432,52); sit below it so the
+     two debug readouts stack instead of overlapping. */
+  top: 60px;
+  left: 12px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.8vh;
+  pointer-events: none;
+}
+
+#pose-status,
+#pose-label {
+  padding: 0.6vh 1.2vw;
+  border-radius: 999px;
+  background: rgba(4, 36, 58, 0.7);
+  border: 1px solid rgba(233, 251, 255, 0.25);
+  font-size: 1.6vh;
+  letter-spacing: 0.04em;
+}
+
+#overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 3vh 4vw;
+  background: linear-gradient(to bottom, rgba(4, 36, 58, 0.75), transparent 28%, transparent 62%, rgba(4, 36, 58, 0.85));
+}
+
+#stage-header { text-align: center; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6); }
+#stage-emoji { font-size: 7vh; line-height: 1.2; }
+#stage-title { font-size: 6vh; font-weight: 700; letter-spacing: 0.02em; }
+#stage-subtitle { font-size: 2.6vh; opacity: 0.9; margin-top: 0.5vh; }
+
+/* Kanaloa's talking-head card */
+#avatar-card {
+  position: absolute;
+  right: 3vw;
+  bottom: 16vh;
+  width: 24vw;
+  min-width: 260px;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  border: 3px solid rgba(255, 255, 255, 0.35);
+  background: rgba(4, 36, 58, 0.6);
+  transition: left 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              right 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: bottom right;
+  z-index: 2;
+  will-change: left, right, transform, width;
+}
+#avatar-card video { display: block; width: 100%; }
+#avatar-name {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  padding: 0.8vh 1vw;
+  font-size: 2vh;
+  font-weight: 600;
+  background: linear-gradient(transparent, rgba(4, 36, 58, 0.9));
+}
+
+/* 5-second breath-hold ring (honi ihu) */
+#hold-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28vh;
+  height: 28vh;
+  transform: translate(-50%, -50%);
+}
+#hold-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring-bg { fill: none; stroke: rgba(233, 251, 255, 0.25); stroke-width: 8; }
+.ring-fg {
+  fill: none;
+  stroke: var(--teal);
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 326.7;
+  stroke-dashoffset: 326.7;
+}
+#hold-ring.running .ring-fg { transition: stroke-dashoffset linear; }
+#hold-count {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9vh;
+  font-weight: 700;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.7);
+}
+
+#stage-footer { text-align: center; }
+#stage-instruction {
+  /* keep clear of the avatar card on the right */
+  max-width: 44vw;
+  margin: 0 auto 2.2vh;
+  font-size: 3vh;
+  line-height: 1.45;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+}
+
+#controls { display: flex; justify-content: center; gap: 1.6vw; }
+button {
+  border: none;
+  border-radius: 999px;
+  padding: 1.8vh 4.5vw;
+  font-size: 2.8vh;
+  font-weight: 700;
+  cursor: pointer;
+  background: var(--coral);
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+button:active { transform: scale(0.97); }
+button.ghost {
+  background: rgba(233, 251, 255, 0.15);
+  color: var(--foam);
+  border: 2px solid rgba(233, 251, 255, 0.4);
+  font-weight: 500;
+}
+
+#progress { display: flex; justify-content: center; gap: 1vw; margin-top: 2vh; }
+.dot {
+  width: 1.6vh;
+  height: 1.6vh;
+  border-radius: 50%;
+  background: rgba(233, 251, 255, 0.3);
+}
+.dot.done { background: var(--sunset); }
+.dot.now { background: var(--teal); transform: scale(1.35); }
+
+#camera-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3vh;
+  background: var(--ocean);
+  text-align: center;
+  padding: 4vw;
+}
+
+.hidden { display: none !important; }
+
+/* Admin debug switch + detected brands (top right, revealed by typing "aloha") */
+#admin-rail {
+  position: absolute;
+  top: 1.4vh;
+  right: 1.6vw;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1vh;
+  max-width: 28vw;
+}
+#admin-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.8vw;
+  padding: 0.6vh 1.2vw;
+  border-radius: 999px;
+  background: rgba(4, 36, 58, 0.7);
+  border: 1px solid rgba(233, 251, 255, 0.25);
+  font-size: 1.6vh;
+  letter-spacing: 0.04em;
+}
+#brand-panel {
+  min-width: 16vw;
+  padding: 1vh 1.2vw 1.2vh;
+  border-radius: 16px;
+  background: rgba(4, 36, 58, 0.75);
+  border: 1px solid rgba(233, 251, 255, 0.25);
+}
+.brand-panel__title {
+  font-size: 1.3vh;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  margin-bottom: 0.7vh;
+}
+#brand-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.45vh;
+  font-size: 1.5vh;
+  line-height: 1.35;
+}
+#brand-list:empty::after {
+  content: 'no labels yet';
+  opacity: 0.65;
+  font-size: 1.4vh;
+}
+.brand-label {
+  display: inline-block;
+  min-width: 7.2em;
+  margin-right: 0.4vw;
+  font-size: 1.25vh;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 4.6vh;
+  height: 2.4vh;
+}
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+  border-radius: 999px;
+  background: rgba(233, 251, 255, 0.25);
+  transition: background 0.2s;
+}
+.slider::before {
+  content: '';
+  position: absolute;
+  width: 1.8vh;
+  height: 1.8vh;
+  left: 0.3vh;
+  top: 0.3vh;
+  border-radius: 50%;
+  background: var(--foam);
+  transition: transform 0.2s;
+}
+.switch input:checked + .slider { background: var(--teal); }
+.switch input:checked + .slider::before { transform: translateX(2.2vh); }
+
+#save-status {
+  position: absolute;
+  bottom: 1.4vh;
+  left: 1.6vw;
+  z-index: 3;
+  padding: 0.6vh 1.2vw;
+  border-radius: 999px;
+  background: rgba(4, 36, 58, 0.7);
+  border: 1px solid rgba(233, 251, 255, 0.25);
+  font-size: 1.6vh;
+  letter-spacing: 0.04em;
+}
+
+/* ---- Wheel of Aloha -------------------------------------------------------- */
+#wheel-area {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -52%);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1vh;
+}
+#wheel-pointer {
+  font-size: 4vh;
+  color: #e9fbff;
+  text-shadow: 0 0 1.2vh rgba(4, 36, 58, 0.9);
+  margin-bottom: -1.6vh;
+  z-index: 1;
+}
+#wheel-svg {
+  width: 52vh;
+  height: 52vh;
+  filter: drop-shadow(0 0 2.4vh rgba(4, 36, 58, 0.75));
+  transition: filter 0.3s;
+}
+#wheel-area.grabbed #wheel-svg {
+  filter: drop-shadow(0 0 3vh rgba(55, 195, 184, 0.95));
+}
+#wheel-svg .wheel-number {
+  fill: #e9fbff;
+  font-size: 48px;
+  font-weight: 800;
+  paint-order: stroke;
+  stroke: rgba(4, 36, 58, 0.55);
+  stroke-width: 4px;
+}
+#wheel-svg .wheel-hub {
+  font-size: 26px;
+}
+#wheel-hint {
+  padding: 1vh 2.4vw;
+  border-radius: 999px;
+  background: rgba(4, 36, 58, 0.75);
+  border: 1px solid rgba(233, 251, 255, 0.25);
+  font-size: 2.4vh;
+  min-height: 3.2vh;
+}
+
+/* ---- Aloha match card ------------------------------------------------------- */
+#match-card {
+  position: absolute;
+  top: 52%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  width: min(64vh, 86vw);
+  max-height: 74vh;
+  padding: 2vh 2.5vw;
+  border-radius: 2.4vh;
+  background: rgba(4, 36, 58, 0.88);
+  border: 1px solid rgba(233, 251, 255, 0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.2vh;
+  text-align: center;
+}
+#match-photo-wrap {
+  position: relative;
+  width: 13vh;
+  height: 13vh;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 0.5vh solid rgba(55, 195, 184, 0.85);
+  background: rgba(55, 195, 184, 0.25);
+}
+#match-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+}
+#match-initial {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 6vh;
+  font-weight: 700;
+  color: #e9fbff;
+}
+#match-card h2 {
+  margin: 0;
+  font-size: 3.2vh;
+}
+#match-blurb {
+  margin: 0;
+  font-size: 2.2vh;
+  opacity: 0.9;
+}
+#match-reasons {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 2vh;
+  color: #37c3b8;
+}
+#match-reasons li::before {
+  content: "\2713  ";
+}
+#match-prize {
+  font-size: 2.6vh;
+  font-weight: 600;
+  color: #ffd166;
+}
+#claim-form {
+  display: flex;
+  gap: 0.8vw;
+}
+#claim-email {
+  padding: 1.2vh 1.4vw;
+  border-radius: 1vh;
+  border: 1px solid rgba(233, 251, 255, 0.4);
+  background: rgba(233, 251, 255, 0.12);
+  color: #e9fbff;
+  font-size: 2.2vh;
+  width: 26vw;
+}
+#claim-btn {
+  padding: 1.2vh 1.8vw;
+  border-radius: 1vh;
+  border: none;
+  background: #37c3b8;
+  color: #04243a;
+  font-size: 2.2vh;
+  font-weight: 600;
+  cursor: pointer;
+}
+#claim-qr-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6vh;
+}
+#claim-qr {
+  border-radius: 1vh;
+  background: #fff;
+  padding: 0.6vh;
+}
+#claim-qr-hint {
+  font-size: 1.8vh;
+  opacity: 0.8;
+}
+#claim-done {
+  font-size: 2.4vh;
+  color: #37c3b8;
+  font-weight: 600;
+}
