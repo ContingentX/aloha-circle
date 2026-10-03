@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session, ipcMain } = require('electron');
+const { app, BrowserWindow, session, ipcMain, powerMonitor } = require('electron');
 const path = require('path');
 const { askReasoner } = require('./src/reasoning.cjs');
 const { judgeGesture, describeScene } = require('./src/cosmos.cjs');
@@ -91,6 +91,14 @@ app.whenReady().then(() => {
       })
       .catch((err) => console.error('[recap] error:', err.message));
     return { queued: true };
+  });
+
+  // Lid close kills the camera track; tell the renderer when the machine wakes
+  // so it can abandon the stale session and re-acquire the camera.
+  powerMonitor.on('resume', () => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send('power:resume');
+    }
   });
 
   createWindow();
