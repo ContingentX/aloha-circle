@@ -6,8 +6,10 @@
   "private": true,
   "scripts": {
     "start": "electron .",
+    "start:watch": "sh scripts/kiosk-watchdog.sh",
     "kiosk": "electron . --kiosk",
-    "test": "node --test test/gestures.test.mjs test/avatarPlacement.test.mjs test/adminMode.test.mjs test/brands.test.mjs test/brandPanel.test.mjs test/brandSense.test.cjs test/matching.test.mjs test/wheel.test.mjs test/cosmos.test.cjs test/recordings.test.cjs test/recap.test.cjs",
+    "kiosk:watch": "sh scripts/kiosk-watchdog.sh --kiosk",
+    "test": "node --test test/gestures.test.mjs test/avatarPlacement.test.mjs test/adminMode.test.mjs test/brands.test.mjs test/brandPanel.test.mjs test/brandSense.test.cjs test/matching.test.mjs test/wheel.test.mjs test/cosmos.test.cjs test/recordings.test.cjs test/recap.test.cjs test/resilience.test.cjs",
     "fetch-media": "node scripts/fetch-media.mjs"
   },
   "devDependencies": {

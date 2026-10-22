@@ -112,8 +112,33 @@ async function acquireStream() {
   }
   els.camera.srcObject = stream;
   cameraStream = stream;
+  lastFrameAt = Date.now();
   els.cameraError.classList.add('hidden');
 }
+
+// Frames can stop without the track dying (black feed after a lid reopen the
+// OS never reported as a resume). requestVideoFrameCallback is ground truth:
+// no frame for FRAME_STALL_MS while the stream claims to be live = camera
+// loss. The pending callback survives srcObject swaps, so one chain is enough.
+const FRAME_STALL_MS = 10_000;
+let lastFrameAt = Date.now();
+
+function trackCameraFrames() {
+  if (typeof els.camera.requestVideoFrameCallback !== 'function') return;
+  els.camera.requestVideoFrameCallback(() => {
+    lastFrameAt = Date.now();
+    trackCameraFrames();
+  });
+}
+
+setInterval(() => {
+  if (cameraRecovering || !cameraStream) return;
+  // Hidden page (display asleep, window minimized) stops frame callbacks
+  // legitimately — don't churn camera re-acquisition all night.
+  if (document.hidden) { lastFrameAt = Date.now(); return; }
+  if (Date.now() - lastFrameAt < FRAME_STALL_MS) return;
+  handleCameraLoss('frames stalled');
+}, FRAME_STALL_MS / 2);
 
 async function startCamera() {
   // ?fakecam=<media url>: deterministic camera feed for recorded takes
@@ -608,6 +633,7 @@ els.back.addEventListener('click', () => {
 
 initAdminMode();
 startCamera();
+trackCameraFrames();
 renderStage();
 
 // System sleep/wake (lid close): treat it like a camera loss even if the track
