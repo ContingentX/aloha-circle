@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('kiosk', {
     ipcRenderer.invoke('cosmos:describe', imageDataUrl, prompt),
   analyzeBrands: (imageDataUrl) => ipcRenderer.invoke('brands:analyze', imageDataUrl),
   saveRecording: (buffer, meta) => ipcRenderer.invoke('recording:save', buffer, meta),
+  onPowerResume: (cb) => ipcRenderer.on('power:resume', () => cb()),
   queueRecap: (videoPath, meta) => ipcRenderer.invoke('recap:generate', videoPath, meta),
   // The sandboxed renderer has no process.env — pose backend selection crosses here.
   roboflowInferUrl: process.env.ROBOFLOW_INFER_URL || null,
