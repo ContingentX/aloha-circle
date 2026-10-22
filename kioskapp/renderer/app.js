@@ -133,6 +133,9 @@ function trackCameraFrames() {
 
 setInterval(() => {
   if (cameraRecovering || !cameraStream) return;
+  // Hidden page (display asleep, window minimized) stops frame callbacks
+  // legitimately — don't churn camera re-acquisition all night.
+  if (document.hidden) { lastFrameAt = Date.now(); return; }
   if (Date.now() - lastFrameAt < FRAME_STALL_MS) return;
   handleCameraLoss('frames stalled');
 }, FRAME_STALL_MS / 2);
