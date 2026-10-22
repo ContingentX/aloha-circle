@@ -113,7 +113,9 @@ describe('createGrabSpinGesture', () => {
     g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, 300);
     assert.equal(g.state, 'grabbed');
     // 240px over 1.2s ≈ 0.42 heights/s — under the 0.5 pull-speed floor
-    assert.equal(g.feed(frame({ rightWrist: { x: 330, y: 360 } }), VIDEO, 1500), null);
+    assert.deepEqual(g.feed(frame({ rightWrist: { x: 330, y: 360 } }), VIDEO, 1500), {
+      type: 'ungrab',
+    });
     assert.equal(g.state, 'idle');
   });
 
@@ -123,7 +125,9 @@ describe('createGrabSpinGesture', () => {
     g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, 300);
     g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, 600); // parked — anchor refreshes
     // moved 50px (past the settle band) but 1.4s after the anchor → expired
-    assert.equal(g.feed(frame({ rightWrist: { x: 330, y: 170 } }), VIDEO, 2000), null);
+    assert.deepEqual(g.feed(frame({ rightWrist: { x: 330, y: 170 } }), VIDEO, 2000), {
+      type: 'ungrab',
+    });
     assert.equal(g.state, 'idle');
   });
 
@@ -139,6 +143,37 @@ describe('createGrabSpinGesture', () => {
     }
     const spin = g.feed(frame({ rightWrist: { x: 330, y: 361 } }), VIDEO, 1800);
     assert.equal(spin.type, 'spin');
+  });
+
+  test('a smooth pull at 30fps spins — the anchor must not slide down with the hand', () => {
+    // Seth's live failure: at high pose fps each frame moves only ~20px, under
+    // the settle band (0.25 × shoulderWidth 120 = 30px). Per-frame re-anchoring
+    // followed the hand down, so the drop never accumulated and the pull never
+    // fired. Stillness-gated anchoring must let these small steps add up.
+    const g = createGrabSpinGesture();
+    g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, 0);
+    assert.deepEqual(g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, 300), { type: 'grab' });
+    let fired = null;
+    // 20px per 33ms frame ≈ 1.25 video-heights/s — a normal brisk pull
+    for (let i = 1; i <= 10 && !fired; i++) {
+      fired = g.feed(frame({ rightWrist: { x: 330, y: 120 + i * 20 } }), VIDEO, 300 + i * 33);
+    }
+    assert.ok(fired, 'smooth pull never fired');
+    assert.equal(fired.type, 'spin');
+    assert.ok(fired.velocity >= 360 && fired.velocity <= 1440, `velocity ${fired.velocity}`);
+  });
+
+  test('hovering still re-anchors after settleMs, so slow drift cannot bank a free pull', () => {
+    const g = createGrabSpinGesture();
+    g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, 0);
+    g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, 300);
+    // Hand drifts to 140 and sits there past settleMs → anchor follows to 140
+    g.feed(frame({ rightWrist: { x: 330, y: 140 } }), VIDEO, 600);
+    g.feed(frame({ rightWrist: { x: 330, y: 140 } }), VIDEO, 900);
+    // A shallow 80px pull from the NEW anchor (140 → 220) stays under the
+    // 96px pull distance — if the anchor had stuck at 120 this would fire.
+    assert.equal(g.feed(frame({ rightWrist: { x: 330, y: 220 } }), VIDEO, 1100), null);
+    assert.equal(g.state, 'grabbed');
   });
 
   test('wrist lost mid-pull → the elbow drop carries the spin', () => {
@@ -159,7 +194,9 @@ describe('createGrabSpinGesture', () => {
     for (let t = 600; t <= 5100; t += 500) {
       g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, t);
     }
-    assert.equal(g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, 5400), null);
+    assert.deepEqual(g.feed(frame({ rightWrist: { x: 330, y: 120 } }), VIDEO, 5400), {
+      type: 'ungrab',
+    });
     assert.equal(g.state, 'idle'); // re-armed: the next raised hold can grab again
   });
 

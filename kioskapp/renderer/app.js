@@ -14,6 +14,7 @@ const $ = (id) => document.getElementById(id);
 const els = {
   camera: $('camera'),
   emoji: $('stage-emoji'),
+  header: $('stage-header'),
   title: $('stage-title'),
   subtitle: $('stage-subtitle'),
   instruction: $('stage-instruction'),
@@ -31,6 +32,7 @@ const els = {
   wheelArea: $('wheel-area'),
   wheelSvg: $('wheel-svg'),
   wheelHint: $('wheel-hint'),
+  wheelGrabLabel: $('wheel-grab-label'),
   matchCard: $('match-card'),
   matchPhoto: $('match-photo'),
   matchInitial: $('match-initial'),
@@ -404,7 +406,14 @@ function feedWheelGesture(payload) {
   if (!fired) return;
   if (fired.type === 'grab') {
     els.wheelArea.classList.add('grabbed');
+    els.wheelGrabLabel.textContent = 'Pull down!';
     els.wheelHint.textContent = 'Got it — now pull down fast!';
+    return;
+  }
+  if (fired.type === 'ungrab') {
+    els.wheelArea.classList.remove('grabbed');
+    els.wheelGrabLabel.textContent = 'Grab me!';
+    els.wheelHint.textContent = 'Reach up ↑ grab the handle, then pull down fast!';
     return;
   }
   if (fired.type === 'spin') spinWheel(fired.velocity, 'gesture');
@@ -430,6 +439,8 @@ function spinWheel(velocity, source) {
     const experience = EXPERIENCES[outcome.index];
     const number = outcome.index + 1;
     wheelResult = { experienceId: experience.id, title: experience.title, number, velocity, source };
+    els.wheelArea.classList.remove('spinning');
+    els.wheelArea.classList.add('done');
     els.wheelHint.textContent = `\u{1F33A} #${number} — ${experience.title}!`;
     els.next.disabled = false;
     wheelSpinning = false;
@@ -441,6 +452,10 @@ function spinWheel(velocity, source) {
 
 function renderWheelStage(active) {
   els.wheelArea.classList.toggle('hidden', !active);
+  // The slot-machine handle owns the top-center; the stage header would sit
+  // right behind it (same spot the footer line is suppressed for below).
+  // visibility (not display) — the header's box keeps the overlay layout.
+  els.header.style.visibility = active ? 'hidden' : '';
   if (!active) return;
   if (!els.wheelSvg.innerHTML) els.wheelSvg.innerHTML = buildWheelSvg(EXPERIENCES);
   wheelGesture.reset();
@@ -448,7 +463,9 @@ function renderWheelStage(active) {
   // right under it and double it, so the wheel stage leaves the footer empty.
   els.instruction.textContent = '';
   if (!wheelResult) {
-    els.wheelHint.textContent = 'Reach up ↑ grab the top of the wheel, then pull down fast!';
+    els.wheelArea.classList.remove('grabbed', 'spinning', 'done');
+    els.wheelGrabLabel.textContent = 'Grab me!';
+    els.wheelHint.textContent = 'Reach up ↑ grab the handle, then pull down fast!';
   }
 }
 
