@@ -1,5 +1,10 @@
 const { app, BrowserWindow, session, ipcMain, powerMonitor } = require('electron');
 const path = require('path');
+const {
+  attachWindowRecovery,
+  pingRendererAfterResume,
+  createGpuCrashTracker,
+} = require('./src/resilience.cjs');
 const { askReasoner } = require('./src/reasoning.cjs');
 const { judgeGesture, describeScene } = require('./src/cosmos.cjs');
 const { analyzeBrands } = require('./src/brandSense.cjs');
@@ -33,6 +38,13 @@ function createWindow() {
   if (process.env.KIOSK_STAGE) query.stage = process.env.KIOSK_STAGE;
   if (process.env.KIOSK_FAKE_CAM) query.fakecam = process.env.KIOSK_FAKE_CAM;
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'), { query });
+
+  // Unattended kiosk: a crashed or hung renderer must come back by itself.
+  // New window first — zero live windows would trip window-all-closed → quit.
+  attachWindowRecovery(win, () => {
+    createWindow();
+    if (!win.isDestroyed()) win.destroy();
+  });
 
   // Smoke-test hook: KIOSK_SHOT=/path/out.png captures the window and quits.
   if (process.env.KIOSK_SHOT) {
@@ -102,10 +114,29 @@ app.whenReady().then(() => {
   });
 
   // Lid close kills the camera track; tell the renderer when the machine wakes
-  // so it can abandon the stale session and re-acquire the camera.
+  // so it can abandon the stale session and re-acquire the camera. A renderer
+  // that froze during sleep can't hear that message — ping it and reload if
+  // it doesn't answer.
   powerMonitor.on('resume', () => {
     for (const win of BrowserWindow.getAllWindows()) {
       win.webContents.send('power:resume');
+      pingRendererAfterResume(win).catch((err) =>
+        console.error('[resilience] resume ping failed:', err)
+      );
+    }
+  });
+
+  // Electron auto-restarts a crashed GPU process; a crash *loop* needs a full
+  // app restart. Under the watchdog wrapper a non-zero exit is enough; bare
+  // `npm start` relaunches itself.
+  const gpuCrashLoop = createGpuCrashTracker();
+  app.on('child-process-gone', (_event, details) => {
+    if (details.type !== 'GPU' || details.reason === 'clean-exit') return;
+    console.warn('[resilience] GPU process gone:', details.reason);
+    if (gpuCrashLoop()) {
+      console.error('[resilience] GPU crash loop — restarting the app');
+      if (process.env.KIOSK_WATCHDOG !== '1') app.relaunch();
+      app.exit(1);
     }
   });
 

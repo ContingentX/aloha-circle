@@ -30,9 +30,28 @@ npm install
 npm run fetch-media   # pulls Kanaloa's clips from aloha-circle.com/media/kiosk
 npm start             # windowed dev mode
 npm run kiosk         # fullscreen kiosk mode
+npm run start:watch   # windowed + auto-restart on crash
+npm run kiosk:watch   # fullscreen + auto-restart on crash (use this on the floor)
 ```
 
 Without `fetch-media` the app still works — clips stream from the media bucket.
+
+### Self-recovery
+
+The kiosk runs unattended, so it heals itself at four layers:
+
+- **Camera track dies / system resumes** (lid close → reopen): the renderer
+  abandons the session and re-acquires the camera every 3 s until it's back.
+- **Feed goes black without the track dying**: no camera frame for 10 s while
+  the stream claims to be live is treated as camera loss.
+- **Renderer crashes or hangs**: the main process recreates the window a few
+  seconds after a crash, and reloads a hung renderer that doesn't recover
+  within 5 s. After every system resume it pings the renderer and reloads it
+  if it doesn't answer within 8 s (`src/resilience.cjs`).
+- **Whole app crashes** (including a GPU-process crash loop, which exits the
+  app): the `*:watch` scripts wrap Electron in `scripts/kiosk-watchdog.sh`,
+  which restarts it after `KIOSK_RESTART_DELAY` (default 5 s). A clean quit
+  (Cmd+Q) exits the loop.
 
 ## Optional reasoning (CoreWeave)
 
