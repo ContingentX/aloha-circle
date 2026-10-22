@@ -4,6 +4,11 @@
 
 const MIME_CANDIDATES = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
 
+// Hard ceiling on one session's footage. A lid-close mid-ritual once left the
+// recorder running for 3h51m (345 MB of chunks in renderer memory); any ritual
+// longer than this is abandoned hardware, not a visitor.
+const MAX_RECORD_MS = 15 * 60 * 1000;
+
 export function createSessionRecorder() {
   let rec = null;
   let chunks = [];
@@ -13,9 +18,16 @@ export function createSessionRecorder() {
   function begin(stream) {
     discard();
     const mimeType = MIME_CANDIDATES.find((m) => MediaRecorder.isTypeSupported(m));
-    rec = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2_500_000 });
-    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-    rec.start(1000);
+    const r = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2_500_000 });
+    rec = r;
+    r.ondataavailable = (e) => {
+      if (e.data && e.data.size) chunks.push(e.data);
+      // finish() handles an already-inactive recorder, so capping here is safe.
+      if (Date.now() - startedAt > MAX_RECORD_MS && r.state === 'recording') {
+        try { r.stop(); } catch { /* already stopping */ }
+      }
+    };
+    r.start(1000);
     startedAt = Date.now();
     meta = {
       sessionId: crypto.randomUUID(),

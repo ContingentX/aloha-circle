@@ -2,25 +2,45 @@
 // env is configured) push it to the team-18 bucket so it appears in VSS search.
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { spawn } = require('child_process');
 const { vastConfigFromEnv, uploadToVast, triggerVssSync } = require('./vastUpload.cjs');
 
 // The team-18 VSS pipeline has only been exercised with mp4 sources, while
 // MediaRecorder hands us webm. Best-effort local transcode; on any failure
 // (no ffmpeg, bad input, timeout) the caller falls back to uploading webm.
+// Async on purpose: this runs in the Electron main process, and a spawnSync
+// here once froze the whole kiosk UI for the full timeout on an oversized
+// recording.
+const TRANSCODE_TIMEOUT_MS = 120000;
+
 function transcodeToMp4(videoPath) {
   const mp4Path = videoPath.replace(/\.webm$/, '.mp4');
-  try {
-    const r = spawnSync(
-      'ffmpeg',
-      ['-y', '-i', videoPath, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22',
-       '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', mp4Path],
-      { stdio: 'ignore', timeout: 120000 }
-    );
-    if (r.status === 0 && fs.existsSync(mp4Path) && fs.statSync(mp4Path).size > 0) return mp4Path;
-  } catch (_) { /* fall through to cleanup */ }
-  try { fs.unlinkSync(mp4Path); } catch (_) { /* never existed */ }
-  return null;
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (ok) => {
+      if (settled) return;
+      settled = true;
+      if (ok && fs.existsSync(mp4Path) && fs.statSync(mp4Path).size > 0) return resolve(mp4Path);
+      try { fs.unlinkSync(mp4Path); } catch (_) { /* never existed */ }
+      resolve(null);
+    };
+    let child;
+    try {
+      child = spawn(
+        'ffmpeg',
+        ['-y', '-i', videoPath, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22',
+         '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', mp4Path],
+        { stdio: 'ignore' }
+      );
+    } catch (_) {
+      return done(false);
+    }
+    const timer = setTimeout(() => {
+      try { child.kill('SIGKILL'); } catch (_) { /* already gone */ }
+    }, TRANSCODE_TIMEOUT_MS);
+    child.on('error', () => { clearTimeout(timer); done(false); });
+    child.on('close', (code) => { clearTimeout(timer); done(code === 0); });
+  });
 }
 
 function sessionFilename(meta, now = new Date()) {
@@ -42,7 +62,7 @@ async function saveRecordingAndUpload(buffer, meta, opts = {}) {
   const cfg = vastConfigFromEnv(env);
   if (cfg) {
     try {
-      const mp4Path = opts.transcode === false ? null : transcodeToMp4(videoPath);
+      const mp4Path = opts.transcode === false ? null : await transcodeToMp4(videoPath);
       const uploadPath = mp4Path || videoPath;
       const uploadName = mp4Path ? name.replace(/\.webm$/, '.mp4') : name;
       result.url = await uploadToVast(uploadPath, `${cfg.prefix}${uploadName}`, cfg);

@@ -91,6 +91,28 @@ async function pollBrands() {
 }
 
 // ---- camera ---------------------------------------------------------------
+// macOS kills the camera track on lid close; a kiosk has to notice and come
+// back on its own. acquireStream is shared by first start and every recovery —
+// the pose loop reads frames off the same <video>, so swapping srcObject is
+// enough and pose/brand timers only start once.
+async function acquireStream() {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { width: { ideal: 1920 }, height: { ideal: 1080 }, facingMode: 'user' },
+    audio: false,
+  });
+  if (cameraStream) {
+    for (const track of cameraStream.getTracks()) {
+      try { track.stop(); } catch { /* already dead */ }
+    }
+  }
+  for (const track of stream.getTracks()) {
+    track.addEventListener('ended', () => handleCameraLoss('track ended'));
+  }
+  els.camera.srcObject = stream;
+  cameraStream = stream;
+  els.cameraError.classList.add('hidden');
+}
+
 async function startCamera() {
   // ?fakecam=<media url>: deterministic camera feed for recorded takes
   // (Chromium's fake-device switches don't engage in this Electron build).
@@ -113,13 +135,7 @@ async function startCamera() {
     return;
   }
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1920 }, height: { ideal: 1080 }, facingMode: 'user' },
-      audio: false,
-    });
-    els.camera.srcObject = stream;
-    cameraStream = stream;
-    els.cameraError.classList.add('hidden');
+    await acquireStream();
     pose.start(els.camera, onPoseEvent);
     clearInterval(brandTimer);
     brandTimer = setInterval(pollBrands, 8000);
@@ -128,6 +144,51 @@ async function startCamera() {
     console.error('camera failed:', err);
     els.cameraError.classList.remove('hidden');
   }
+}
+
+const CAMERA_RETRY_MS = 3000;
+let cameraRecovering = false;
+
+async function handleCameraLoss(reason) {
+  if (cameraRecovering) return;
+  cameraRecovering = true;
+  console.warn('[camera] lost (' + reason + ') — abandoning session, re-acquiring');
+  els.cameraError.classList.remove('hidden');
+  abandonSession();
+  for (;;) {
+    try {
+      await acquireStream();
+      break;
+    } catch {
+      await new Promise((r) => setTimeout(r, CAMERA_RETRY_MS));
+    }
+  }
+  cameraRecovering = false;
+}
+
+// A session whose visitor walked away (idle timeout) or whose camera died is
+// over: back to attract, which discards any unfinished recording — unless the
+// ritual reached mahalo, in which case trackSession saves it as usual.
+function abandonSession() {
+  if (STAGES[stageIndex].id !== 'attract') {
+    stageIndex = 0;
+    renderStage();
+  } else {
+    recorder.discard();
+  }
+}
+
+const IDLE_RESET_MS = 3 * 60 * 1000;
+let idleTimer = null;
+
+function armIdleWatchdog(stage) {
+  clearTimeout(idleTimer);
+  idleTimer = null;
+  if (stage.id === 'attract') return;
+  idleTimer = setTimeout(() => {
+    console.warn('[idle] no progress in ' + IDLE_RESET_MS / 60000 + ' min — resetting to attract');
+    abandonSession();
+  }, IDLE_RESET_MS);
 }
 
 function onPoseEvent(payload) {
@@ -478,6 +539,7 @@ function renderStage() {
   cancelHold();
   pose.setExpected(stage.detect || null);
   armStallJudge();
+  armIdleWatchdog(stage);
   trackSession(stage);
 
   els.emoji.textContent = stage.emoji || '';
@@ -530,3 +592,9 @@ els.back.addEventListener('click', () => {
 initAdminMode();
 startCamera();
 renderStage();
+
+// System sleep/wake (lid close): treat it like a camera loss even if the track
+// claims to be alive — the visitor is gone and the feed is usually black.
+if (typeof window.kiosk?.onPowerResume === 'function') {
+  window.kiosk.onPowerResume(() => handleCameraLoss('system resume'));
+}

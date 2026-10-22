@@ -90,12 +90,12 @@ test('vssSyncBodyFromEnv builds the batch-sync/start schema with read-only sourc
   assert.equal(vssSyncBodyFromEnv(env).source_access_key, 'WRITEKEY');
 });
 
-test('transcodeToMp4 falls back to null on an invalid source', () => {
+test('transcodeToMp4 falls back to null on an invalid source', async () => {
   const { transcodeToMp4 } = require('../src/recordings.cjs');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aloha-tc-'));
   const bad = path.join(dir, 'not-video.webm');
   fs.writeFileSync(bad, 'not a video');
-  assert.equal(transcodeToMp4(bad), null);
+  assert.equal(await transcodeToMp4(bad), null);
   assert.equal(fs.existsSync(path.join(dir, 'not-video.mp4')), false);
   fs.rmSync(dir, { recursive: true, force: true });
 });
