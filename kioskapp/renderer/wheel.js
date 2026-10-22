@@ -73,19 +73,22 @@ export function spinOutcome(velocity, { segments, decel = SPIN_DECEL, startAngle
 
 // Gesture: a wrist raised above the face (reaching for the wheel's top), held
 // briefly = grab; then a fast pull down of at least ~0.8 shoulder-widths = spin,
-// with velocity set by pull speed. The pull clock starts when the hand actually
-// starts moving (the anchor re-baselines while it hovers at the top), not when
-// the grab fired — reaction time doesn't eat the window. If MoveNet loses the
-// wrist mid-pull (its usual failure during fast motion), the same-side elbow's
-// drop stands in for it.
-// feed(kp13, video, t) returns null | {type:'grab'} | {type:'spin', velocity}.
+// with velocity set by pull speed. While the hand hovers at the top the anchor
+// follows it — but only after the hand has been STILL for settleMs. Re-baselining
+// on per-frame displacement made the gesture fps-dependent: at high pose fps a
+// smooth pull moves only a few px between frames, so the anchor slid down with
+// the hand and the drop never accumulated. If MoveNet loses the wrist mid-pull
+// (its usual failure during fast motion), the same-side elbow's drop stands in.
+// feed(kp13, video, t) returns null | {type:'grab'} | {type:'ungrab'} |
+// {type:'spin', velocity}.
 export function createGrabSpinGesture(opts = {}) {
   const grabHoldMs = opts.grabHoldMs ?? 250;
   const graceMs = opts.graceMs ?? 300;
   const maxGrabMs = opts.maxGrabMs ?? 5000; // how long a grab may hover before re-arming
   const maxPullMs = opts.maxPullMs ?? 1200; // window for the pull itself, from its first movement
   const pullScale = opts.pullScale ?? 0.8;
-  const settleScale = opts.settleScale ?? 0.25; // drift below this keeps re-baselining the anchor
+  const settleScale = opts.settleScale ?? 0.25; // hover band around the anchor
+  const settleMs = opts.settleMs ?? 250; // how long the hand must sit still to re-baseline
   const minPullSpeed = opts.minPullSpeed ?? 0.5; // video-heights/s — slower is lowering, not pulling
   const elbowTravel = opts.elbowTravel ?? 1.6; // the elbow arcs ~60% of the wrist's pull distance
   const minVelocity = opts.minVelocity ?? 360;
@@ -98,8 +101,10 @@ export function createGrabSpinGesture(opts = {}) {
   let lastRaised = 0;
   let grabT = 0; // when the grab fired
   let baseY = 0; // pull anchor: the wrist's y while parked at the top
-  let baseT = 0; // when the anchor last moved = when the pull started
+  let baseT = 0; // pull clock: the last frame the hand was parked near the anchor
   let elbowBaseY = null;
+  let stillY = 0; // stillness candidate: where the hand has been sitting
+  let stillT = 0; // ...and since when
   let scale = 0;
 
   const wrist = (kp, idx) => {
@@ -148,6 +153,8 @@ export function createGrabSpinGesture(opts = {}) {
           grabT = t;
           baseY = raised[0].k.y;
           baseT = t;
+          stillY = baseY;
+          stillT = t;
           const e = elbow(kp);
           elbowBaseY = e ? e.y : null;
           scale = shoulderWidth(kp) || (video?.height || 480) * 0.15;
@@ -159,32 +166,44 @@ export function createGrabSpinGesture(opts = {}) {
       if (state === 'grabbed') {
         if (t - grabT > maxGrabMs) {
           reset();
-          return null;
+          return { type: 'ungrab' };
         }
         const w = wrist(kp, side);
         const e = elbow(kp);
-        let drop = null;
-        if (w) drop = w.y - baseY;
-        else if (e && elbowBaseY != null) drop = (e.y - elbowBaseY) * elbowTravel;
-        if (drop == null) return null; // both joints flickered out this frame
+        let y = null;
+        if (w) y = w.y;
+        else if (e && elbowBaseY != null) y = baseY + (e.y - elbowBaseY) * elbowTravel;
+        if (y == null) return null; // both joints flickered out this frame
+        const drop = y - baseY;
         if (drop < scale * settleScale) {
-          // Hand still parked at the top (or drifting) — follow it so the pull
-          // clock and distance start from where the pull actually begins.
-          if (w) baseY = w.y;
-          if (e) elbowBaseY = e.y;
+          // Hand parked near the anchor: the pull clock restarts from here, so
+          // reaction time never eats the window. The anchor POSITION only
+          // follows the hand once it has sat still for settleMs — re-anchoring
+          // per frame made the gesture fps-dependent (at high pose fps a smooth
+          // pull moves a few px per frame, so the anchor slid down with the
+          // hand and the drop never accumulated).
           baseT = t;
+          if (Math.abs(y - stillY) > scale * settleScale) {
+            stillY = y;
+            stillT = t;
+          } else if (t - stillT >= settleMs) {
+            baseY = y;
+            if (e) elbowBaseY = e.y;
+            stillY = y;
+            stillT = t;
+          }
           return null;
         }
         if (t - baseT > maxPullMs) {
           reset();
-          return null;
+          return { type: 'ungrab' };
         }
         if (drop < scale * pullScale) return null;
         const dtSec = Math.max((t - baseT) / 1000, 0.05);
         const heightsPerSec = drop / Math.max(video?.height || 480, 1) / dtSec;
         if (heightsPerSec < minPullSpeed) {
           reset(); // covered the distance but too slowly — a lower, not a pull
-          return null;
+          return { type: 'ungrab' };
         }
         const velocity = Math.min(maxVelocity, Math.max(minVelocity, heightsPerSec * velocityScale));
         reset();

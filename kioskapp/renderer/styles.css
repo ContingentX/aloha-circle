@@ -321,6 +321,92 @@ button.ghost {
   margin-bottom: -1.6vh;
   z-index: 1;
 }
+/* Slot-machine handle at the top of the wheel — the physical thing to grab. */
+#wheel-handle-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: -0.6vh;
+  z-index: 2;
+}
+#wheel-handle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: transform 0.25s ease-out;
+}
+#wheel-handle-knob {
+  width: 4.2vh;
+  height: 4.2vh;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ff9a8c, #e0452f 65%, #8f1f10);
+  box-shadow: 0 0 1.6vh rgba(224, 69, 47, 0.7);
+  animation: handle-beckon 1.4s ease-in-out infinite;
+}
+#wheel-handle-stem {
+  width: 1.1vh;
+  height: 6.5vh;
+  border-radius: 0.6vh;
+  background: linear-gradient(to right, #6f7f8c, #cfdbe4 45%, #6f7f8c);
+  box-shadow: 0 0 0.8vh rgba(4, 36, 58, 0.6);
+}
+@keyframes handle-beckon {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 1.6vh rgba(224, 69, 47, 0.7);
+  }
+  50% {
+    transform: scale(1.12);
+    box-shadow: 0 0 2.6vh rgba(255, 154, 140, 0.95);
+  }
+}
+#wheel-grab-label {
+  position: absolute;
+  left: calc(50% + 3.6vh);
+  top: 0.4vh;
+  white-space: nowrap;
+  padding: 0.7vh 1.6vw;
+  border-radius: 999px;
+  background: rgba(224, 69, 47, 0.85);
+  border: 1px solid rgba(255, 210, 200, 0.6);
+  font-size: 2.2vh;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  animation: label-pulse 1.4s ease-in-out infinite;
+}
+@keyframes label-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+#wheel-area.grabbed #wheel-handle {
+  transform: translateY(1.2vh);
+}
+#wheel-area.grabbed #wheel-handle-knob {
+  animation: none;
+  background: radial-gradient(circle at 35% 30%, #9ff2ea, #37c3b8 65%, #156b63);
+  box-shadow: 0 0 2.6vh rgba(55, 195, 184, 0.95);
+}
+#wheel-area.grabbed #wheel-grab-label {
+  background: rgba(21, 107, 99, 0.9);
+  border-color: rgba(159, 242, 234, 0.6);
+  animation: none;
+}
+#wheel-area.spinning #wheel-handle {
+  transform: translateY(7vh);
+  transition: transform 0.18s ease-in;
+}
+#wheel-area.spinning #wheel-grab-label,
+#wheel-area.done #wheel-grab-label,
+#wheel-area.done #wheel-handle {
+  visibility: hidden;
+}
 #wheel-svg {
   width: 52vh;
   height: 52vh;
