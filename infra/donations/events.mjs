@@ -21,6 +21,14 @@ const OCTEN_SEARCH_URL = 'https://api.octen.ai/search';
 const OCTEN_TIMEOUT_MS = 12_000;
 const EVENT_TTL_DAYS = 45;
 const OPTIN_TTL_DAYS = 120;
+// Event-page chat: messages outlive the event record (a matched pair may still
+// be coordinating after the card leaves the listing); presence marks fall off
+// after two days so the "seen recently" rail stays honest.
+const CHAT_TTL_DAYS = 120;
+const PRESENCE_TTL_HOURS = 48;
+const CHAT_TEXT_MAX = 400;
+const CHAT_LIST_MAX = 200;
+const PRESENCE_RECENT_HOURS = 24;
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 
 export const loadEventSources = () => {
@@ -120,7 +128,7 @@ export function createEventsPlane({
   // Hawaii decides when "today" ends (UTC-10, no DST).
   const hawaiiNow = () => new Date(now().getTime() - 10 * 3600e3);
 
-  async function list() {
+  async function publicEvents() {
     const plane = await loadPlane();
     const goingCounts = new Map();
     for (const optIn of plane.optIns) {
@@ -129,9 +137,149 @@ export function createEventsPlane({
         goingCounts.set(eventId, (goingCounts.get(eventId) ?? 0) + 1);
       }
     }
-    const events = plane.events.map(toPublicEvent).filter(Boolean)
+    return plane.events.map(toPublicEvent).filter(Boolean)
       .map((event) => ({ ...event, localsGoing: goingCounts.get(event.id) ?? 0 }));
-    return sortPublicEvents(events, hawaiiNow());
+  }
+
+  async function list() {
+    return sortPublicEvents(await publicEvents(), hawaiiNow());
+  }
+
+  // Event-page lookup by /e/<slug> or raw evt- id. Resolves against every
+  // stored record, not the sorted listing, so a page people coordinated on
+  // keeps rendering (with its past date) instead of 404ing the morning after.
+  async function get(slugOrId) {
+    const key = typeof slugOrId === 'string' ? slugOrId.trim().toLowerCase() : '';
+    if (!key || key.length > 120) return null;
+    const events = await publicEvents();
+    return events.find((event) => event.slug === key || event.id === key) ?? null;
+  }
+
+  // ---- event-page chat + presence -------------------------------------------
+  // One partition per event (EVTCHAT#<id>): MSG#<iso>#<suffix> items hold the
+  // message history, SEEN#<authorKey> items hold presence heartbeats. Author
+  // identity is the same hashed form (sha256 of the signed-in identity) used
+  // by opt-ins — the raw uid never appears in a public payload.
+
+  const chatPartition = (eventId) => `EVTCHAT#${eventId}`;
+
+  const cleanChatText = (value) => {
+    if (typeof value !== 'string') return '';
+    // Strip control characters, collapse runs of whitespace, keep it one line.
+    return value.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, CHAT_TEXT_MAX);
+  };
+
+  const validIdentity = (identity) =>
+    identity && typeof identity.authorKey === 'string' && /^[a-f0-9]{64}$/.test(identity.authorKey) &&
+    typeof identity.name === 'string' && identity.name.trim().length > 0;
+
+  async function queryChatItems(eventId) {
+    const items = [];
+    let startKey;
+    do {
+      const out = await client.send(new QueryCommand({
+        TableName: table,
+        KeyConditionExpression: 'PK = :pk',
+        ExpressionAttributeValues: { ':pk': chatPartition(eventId) },
+        ExclusiveStartKey: startKey,
+      }));
+      items.push(...(out.Items ?? []));
+      startKey = out.LastEvaluatedKey;
+    } while (startKey);
+    return items;
+  }
+
+  const publicMessage = (item) => ({
+    id: item.SK,
+    authorKey: item.authorKey,
+    name: typeof item.name === 'string' ? item.name : 'Aloha friend',
+    photoURL: typeof item.photoURL === 'string' ? item.photoURL : null,
+    text: typeof item.text === 'string' ? item.text : '',
+    createdAt: typeof item.createdAt === 'string' ? item.createdAt : null,
+  });
+
+  async function chatPayload(event) {
+    const items = await queryChatItems(event.id);
+    const messages = items
+      .filter((item) => typeof item.SK === 'string' && item.SK.startsWith('MSG#'))
+      .sort((a, b) => a.SK.localeCompare(b.SK))
+      .slice(-CHAT_LIST_MAX)
+      .map(publicMessage);
+    const recentSinceMs = now().getTime() - PRESENCE_RECENT_HOURS * 3600e3;
+    const presence = items
+      .filter((item) => typeof item.SK === 'string' && item.SK.startsWith('SEEN#') &&
+        typeof item.lastSeenAt === 'string' && Date.parse(item.lastSeenAt) >= recentSinceMs)
+      .sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt))
+      .map((item) => ({
+        authorKey: item.authorKey,
+        name: typeof item.name === 'string' ? item.name : 'Aloha friend',
+        photoURL: typeof item.photoURL === 'string' ? item.photoURL : null,
+        lastSeenAt: item.lastSeenAt,
+      }));
+    // The server clock rides along so clients compute "online now" against it
+    // instead of trusting their own clock.
+    return { event, now: now().toISOString(), messages, presence };
+  }
+
+  async function chat(slugOrId) {
+    const event = await get(slugOrId);
+    if (!event) return { status: 404, body: { error: 'unknown event' } };
+    return { status: 200, body: await chatPayload(event) };
+  }
+
+  async function touchPresence(identity, eventId) {
+    const timestamp = now().toISOString();
+    await client.send(new PutCommand({
+      TableName: table,
+      Item: {
+        PK: chatPartition(eventId),
+        SK: `SEEN#${identity.authorKey}`,
+        eventId,
+        authorKey: identity.authorKey,
+        name: identity.name,
+        ...(identity.photoURL ? { photoURL: identity.photoURL } : {}),
+        lastSeenAt: timestamp,
+        ttl: Math.floor(now().getTime() / 1000) + PRESENCE_TTL_HOURS * 3600,
+      },
+    }));
+  }
+
+  /** Signed-in heartbeat: marks the user present and returns the live payload. */
+  async function presence(identity, slugOrId) {
+    if (!validIdentity(identity)) return { status: 401, body: { error: 'sign in required' } };
+    const event = await get(slugOrId);
+    if (!event) return { status: 404, body: { error: 'unknown event' } };
+    await touchPresence(identity, event.id);
+    return { status: 200, body: await chatPayload(event) };
+  }
+
+  async function postChat(identity, slugOrId, body) {
+    if (!validIdentity(identity)) return { status: 401, body: { error: 'sign in required' } };
+    const event = await get(slugOrId);
+    if (!event) return { status: 404, body: { error: 'unknown event' } };
+    const text = cleanChatText(body?.text);
+    if (!text) {
+      return { status: 400, body: { error: `message text is required (up to ${CHAT_TEXT_MAX} characters)` } };
+    }
+    const timestamp = now().toISOString();
+    // Deterministic suffix: a double-send of the same text in the same
+    // millisecond upserts instead of duplicating.
+    const suffix = sha256(`${identity.authorKey}:${timestamp}:${text}`).slice(0, 8);
+    const item = {
+      PK: chatPartition(event.id),
+      SK: `MSG#${timestamp}#${suffix}`,
+      eventId: event.id,
+      authorKey: identity.authorKey,
+      name: identity.name,
+      ...(identity.photoURL ? { photoURL: identity.photoURL } : {}),
+      text,
+      createdAt: timestamp,
+      ttl: Math.floor(now().getTime() / 1000) + CHAT_TTL_DAYS * 24 * 60 * 60,
+    };
+    await client.send(new PutCommand({ TableName: table, Item: item }));
+    // Posting is presence.
+    await touchPresence(identity, event.id);
+    return { status: 201, body: { message: publicMessage(item) } };
   }
 
   /** Owner keys (sha256 of the signed-in identity) of locals opted into an event. */
@@ -257,5 +405,5 @@ export function createEventsPlane({
     return { published, failures };
   }
 
-  return { list, listOptIns, optInKeys, refresh, setOptIn };
+  return { chat, get, list, listOptIns, optInKeys, postChat, presence, refresh, setOptIn };
 }

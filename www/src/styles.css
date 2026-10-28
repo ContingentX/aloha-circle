@@ -472,3 +472,58 @@ footer .credit { margin-top: 4px; font-size: 0.72rem; opacity: 0.75; }
   .anytime-row { flex-direction: column; align-items: flex-start; gap: 8px; }
   .optin-row { flex-direction: column; align-items: flex-start; }
 }
+
+/* ---- Event pages (/e/<slug>): details + chat + presence ---------------------- */
+/* The event page is a plain page (no scroll-world hero), so it needs the sand
+   gradient painted directly. */
+.event-page { padding-top: 32px; }
+.event-page .brand-lockup { text-decoration: none; }
+.event-page .tagline a { color: var(--ocean); text-decoration: none; }
+.event-page .tagline a:hover { text-decoration: underline; }
+.event-hero .event-summary { display: block; -webkit-line-clamp: unset; overflow: visible; }
+.event-page-title { margin: 2px 0 8px; font-size: 1.5rem; line-height: 1.25; color: var(--ocean-deep); }
+.event-cta-secondary { background: transparent; color: var(--ocean); border: 1px solid var(--ocean); }
+.event-page-link { font-size: 0.82rem; color: var(--ocean); white-space: nowrap; }
+
+/* Presence rail: avatars with a live (green) or recent (grey) dot. */
+.presence-rail { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 0; margin: 10px 0 4px; }
+.presence-chip { display: flex; align-items: center; gap: 8px; }
+.presence-avatar-wrap { position: relative; display: inline-flex; }
+.presence-dot {
+  position: absolute; right: -2px; bottom: -2px; width: 10px; height: 10px;
+  border-radius: 50%; border: 2px solid white;
+}
+.presence-online { background: #2bb24c; }
+.presence-away { background: #a6b7c2; }
+.presence-name { display: flex; flex-direction: column; font-size: 0.82rem; font-weight: 600; color: var(--ink); line-height: 1.2; }
+.presence-state { font-weight: 400; font-size: 0.72rem; color: #5a7484; }
+.presence-empty { margin: 10px 0 4px; }
+
+/* Chat */
+.chat-list {
+  list-style: none; margin: 12px 0 0; padding: 12px; max-height: 420px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 10px;
+  background: #f4f9fb; border-radius: 12px;
+}
+.chat-empty { margin: 12px 0 0; }
+.chat-msg { display: flex; gap: 10px; align-items: flex-start; }
+.chat-avatar { width: 32px; height: 32px; border-radius: 50%; flex: none; object-fit: cover; }
+.chat-avatar-initial {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--ocean); color: white; font-weight: 700; font-size: 0.9rem;
+}
+.chat-bubble { background: white; border-radius: 12px; padding: 8px 12px; min-width: 0; box-shadow: 0 1px 4px rgba(7, 59, 87, 0.07); }
+.chat-mine .chat-bubble { background: #e7f3ec; }
+.chat-msg-meta { margin: 0 0 2px; font-size: 0.78rem; color: var(--ocean-deep); display: flex; gap: 8px; align-items: baseline; }
+.chat-time { color: #5a7484; font-size: 0.72rem; }
+.chat-text { margin: 0; font-size: 0.92rem; line-height: 1.45; overflow-wrap: anywhere; }
+.chat-compose { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+.chat-compose input { flex: 1; margin: 0; }
+.chat-send { margin-top: 0; padding: 10px 18px; }
+.chat-signin { margin-top: 12px; }
+
+/* Match card: the event block that keeps the promise honest. */
+.match-event { margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: #f4f9fb; }
+.match-event-when { margin: 0 0 4px; font-size: 0.95rem; }
+.match-event .event-cta { display: inline-block; margin-top: 8px; text-decoration: none; }
+a.cta { text-decoration: none; display: inline-block; }

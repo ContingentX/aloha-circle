@@ -108,6 +108,18 @@ const sha256 = (s) => createHash('sha256').update(s).digest('hex');
 const getProfile = async (uid) =>
   (await ddb.send(new GetCommand({ TableName: TABLE, Key: { PK: `USER#${uid}`, SK: 'PROFILE' } }))).Item ?? null;
 
+// Display identity for event-page chat: name + photo come from the user's own
+// profile record (server-side, never from the request body), the author key is
+// the same hashed form opt-ins use — the raw uid never reaches a public payload.
+async function chatIdentity(user) {
+  const profile = await getProfile(user.uid);
+  const name = String(profile?.name || user.name || 'Aloha friend').trim().slice(0, 80) || 'Aloha friend';
+  const photoURL = typeof profile?.photoURL === 'string' && /^https:\/\//.test(profile.photoURL)
+    ? profile.photoURL.slice(0, 500)
+    : null;
+  return { authorKey: sha256(`firebase:${user.uid}`), name, photoURL };
+}
+
 const publicProfile = (item) =>
   item && {
     name: item.name, email: item.email, photoURL: item.photoURL,
@@ -465,6 +477,18 @@ export const handler = async (event) => {
     if (method === 'OPTIONS') return resp(204, {}, origin);
     if (method === 'GET' && path === '/experiences') return await listExperiences(origin);
     if (method === 'GET' && path === '/api/events') return resp(200, await eventsPlane.list(), origin);
+    // Event pages (/e/<slug>): detail + chat history are public reads; posting
+    // a message and the presence heartbeat require a signed-in user (below).
+    const eventDetailPath = /^\/api\/events\/([a-z0-9-]{1,120})$/i.exec(path);
+    const eventChatPath = /^\/api\/events\/([a-z0-9-]{1,120})\/(chat|presence)$/i.exec(path);
+    if (method === 'GET' && eventDetailPath) {
+      const eventDetail = await eventsPlane.get(eventDetailPath[1]);
+      return eventDetail ? resp(200, eventDetail, origin) : resp(404, { error: 'unknown event' }, origin);
+    }
+    if (method === 'GET' && eventChatPath?.[2] === 'chat') {
+      const chatOut = await eventsPlane.chat(eventChatPath[1]);
+      return resp(chatOut.status, chatOut.body, origin);
+    }
     if (method === 'POST' && path === '/donate') return await donate(body(), origin);
     if (method === 'GET' && path === '/spin') {
       return await spin(new URLSearchParams(event.rawQueryString ?? '').get('session_id'), origin);
@@ -511,6 +535,14 @@ export const handler = async (event) => {
     if (method === 'POST' && path === '/local/optin') {
       const optIn = await eventsPlane.setOptIn(user.uid, requestBody);
       return resp(optIn.status, optIn.body, origin);
+    }
+    if (method === 'POST' && eventChatPath?.[2] === 'chat') {
+      const posted = await eventsPlane.postChat(await chatIdentity(user), eventChatPath[1], requestBody);
+      return resp(posted.status, posted.body, origin);
+    }
+    if (method === 'POST' && eventChatPath?.[2] === 'presence') {
+      const beat = await eventsPlane.presence(await chatIdentity(user), eventChatPath[1]);
+      return resp(beat.status, beat.body, origin);
     }
     if (method === 'POST' && path === '/experiences') return await createExperience(user, requestBody, origin);
     return resp(404, { error: 'not found' }, origin);

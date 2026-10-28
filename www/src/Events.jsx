@@ -16,13 +16,13 @@ const parseDay = (iso) => {
   return new Date(Date.UTC(year, month - 1, day));
 };
 
-const formatDay = (iso) => {
+export const formatDay = (iso) => {
   const date = parseDay(iso);
   if (!date) return null;
   return `${WEEKDAY_SHORT[date.getUTCDay()]}, ${MONTH_SHORT[date.getUTCMonth()]} ${date.getUTCDate()}`;
 };
 
-const formatRange = (startsAt, endsAt) => {
+export const formatRange = (startsAt, endsAt) => {
   if (!startsAt) return null;
   if (!endsAt || endsAt === startsAt) return formatDay(startsAt);
   const start = parseDay(startsAt);
@@ -111,6 +111,9 @@ function EventCard({ event, featured, onGoWithLocal }) {
           Go with a local
         </button>
         <GoingNote count={event.localsGoing} />
+        {event.slug && (
+          <a className="event-page-link" href={`/e/${event.slug}`}>Event page & chat →</a>
+        )}
       </div>
     </article>
   );
@@ -380,6 +383,7 @@ export function LocalEventPlanner() {
                 <span className="hint">
                   {when ?? 'Any day'} · {event.domain}
                   {event.localsGoing > 0 && ` · ${event.localsGoing} going`}
+                  {event.slug && <> · <a href={`/e/${event.slug}`}>event page & chat</a></>}
                 </span>
               </div>
               <button

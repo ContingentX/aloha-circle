@@ -57,6 +57,27 @@ const tagList = (value) => {
 export const eventIdForUrl = (url) =>
   `evt-${createHash('sha256').update(url).digest('hex').slice(0, 16)}`;
 
+// Human-readable page path for an event (/e/<slug>): the headline with
+// diacritics and publisher suffixes folded away, ending in the start date so
+// the link itself answers "when" ("made-in-maui-county-festival-2026-11-06").
+// Computed, never stored — lookups resolve the slug (or the raw evt- id)
+// against the live plane.
+export function eventSlug(event) {
+  const base = String(event?.title ?? '')
+    .split('|')[0]
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[ʻ'’‘]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 72)
+    .replace(/-+$/, '') || 'event';
+  const day = typeof event?.startsAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(event.startsAt)
+    ? event.startsAt
+    : null;
+  return day ? `${base}-${day}` : base;
+}
+
 // ---- deterministic event-date extraction ------------------------------------
 // Octen returns search results, not structured calendars, so dates come from
 // the text itself. The parser is intentionally conservative: a miss renders as
@@ -411,8 +432,10 @@ export function toPublicEvent(record) {
     isAggregatorPage(title, url, summary)
   ) return null;
   const day = (value) => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null);
+  const startsAt = day(record.startsAt);
   return {
     id,
+    slug: eventSlug({ title, startsAt }),
     title,
     summary,
     url,
@@ -421,7 +444,7 @@ export function toPublicEvent(record) {
     causeTags,
     urgency: Number.isInteger(record.urgency) ? Math.min(5, Math.max(1, record.urgency)) : 1,
     fetchedAt,
-    startsAt: day(record.startsAt),
+    startsAt,
     endsAt: day(record.endsAt),
   };
 }
