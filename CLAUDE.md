@@ -22,14 +22,15 @@ SES domain-proof codes, Stripe donations — served by the Lambda API in
 Firebase is used only as the Google sign-in door (ID tokens verified in the
 Lambda). Full architecture + endpoint list: `infra/README-aws-auth.md`.
 
-## Bright Data scraper settings (Maui Needs Index)
+## Scraper settings (Maui Needs Index)
 
 Scraper configuration is version-controlled in `agentharness/src/sources.json` — one entry per source:
 `{ id, name, url, enabled, parser, schema: { required: [...] } }`.
 
-- The ingest loop (`agentharness/src/ingest.js`) validates every extracted CauseSignal against the source's `schema.required`. A source whose output stops validating is flagged `needs_repair` in `agentharness/data/sources.status.json` — that flag is the trigger for Bright Data scraper auto-repair.
-- When adding/repairing a scraper, edit `sources.json` (never hardcode selectors in code) so settings stay reusable and version-controlled.
-- Bright Data credentials go in `agentharness/.env` as `BRIGHTDATA_API_TOKEN` (never committed).
+- The ingest loop (`agentharness/src/ingest.js`) validates every extracted CauseSignal against the source's `schema.required`. A source whose output stops validating is flagged `needs_repair` in `agentharness/data/sources.status.json`.
+- Live sources use the `octen` parser (`agentharness/src/octen.js` — [Octen](https://docs.octen.ai) Web Search): per-source `octen` block carries `{ query, count, causeTags, urgency, include_domains?, ... }`. Edit `sources.json` (never hardcode queries in code) so settings stay reusable and version-controlled.
+- Octen credentials go in `agentharness/.env` as `OCTEN_API_KEY` (never committed). Without a key, octen sources fail closed to `needs_repair` and fixtures keep running.
+- The original Bright Data seam (hackathon sponsor integration: `src/brightdata.js`, the simulated adapter, and the loopback MCP bridge in `demo/`) is retired but kept in-tree; its example source is `enabled: false`.
 - CauseSignal shape: `{ source, url, title, causeTags[], urgency (1-5), summary, fetchedAt }`.
 
 ## Site media (/media)

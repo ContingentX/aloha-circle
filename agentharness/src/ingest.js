@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { upsert, load, getDataDir } from './store.js';
+import { fetchCauseSignals as fetchOctenCauseSignals } from './octen.js';
 
 const SRC_DIR = path.dirname(fileURLToPath(import.meta.url));
 const HARNESS_DIR = path.join(SRC_DIR, '..');
@@ -36,6 +37,15 @@ const parsers = {
       source: { id: source.id, url: sourceConfig.url ?? source.url, schema: source.schema },
     });
     return adapter.fetchCauseSignals().then((result) => result.signals);
+  },
+  octen(source, { octen } = {}) {
+    // Live provider seam (replaces the simulated Bright Data example): the API
+    // key is injected by the caller (index.js reads OCTEN_API_KEY). Without a
+    // key this source alone fails closed; fixtures keep running.
+    if (typeof octen?.apiKey !== 'string' || octen.apiKey.trim() === '') {
+      throw new Error('octen API key must be injected by the caller (set OCTEN_API_KEY)');
+    }
+    return fetchOctenCauseSignals({ source, apiKey: octen.apiKey, fetchImpl: octen.fetchImpl });
   },
 };
 
