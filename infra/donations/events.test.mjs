@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   articleDateFromUrl,
   eventIdForUrl,
+  eventSlug,
   expandQuery,
   extractEventDates,
   isAggregatorPage,
@@ -574,4 +575,166 @@ test('a signed-in local join stores the hashed identity without echoing it back'
   });
   assert.equal(anonymous.body.linkedToAccount, false);
   assert.equal(puts[1].fields.ownerKey, undefined);
+});
+
+// ---- event pages: slug, detail lookup, chat + presence --------------------------
+
+test('eventSlug folds diacritics and ends with the start date; undated events get a bare slug', () => {
+  assert.equal(
+    eventSlug({ title: '22nd Annual Lāhainā Town Cleanup | Maui Now', startsAt: '2026-11-07' }),
+    '22nd-annual-lahaina-town-cleanup-2026-11-07',
+  );
+  assert.equal(eventSlug({ title: 'Mālama Maui Nui Workdays', startsAt: null }), 'malama-maui-nui-workdays');
+  assert.equal(eventSlug({ title: '≈≈≈' }), 'event');
+});
+
+test('toPublicEvent carries the computed slug', () => {
+  const event = toPublicEvent(storedEvent);
+  assert.equal(event.slug, 'maui-county-fair-november-7-9-2026-11-07');
+});
+
+test('get resolves by slug or id, keeps rendering past events, and 404s unknowns', async () => {
+  const past = {
+    ...storedEvent,
+    PK: 'EVENT#evt-00000000000000aa', entityId: 'evt-00000000000000aa',
+    url: 'https://mauinow.test/past', title: 'October Cleanup', startsAt: '2026-10-01', endsAt: null,
+  };
+  const plane = createEventsPlane({
+    client: fakePlaneClient({ events: [storedEvent, past] }), table: 't',
+    PutCommand, QueryCommand, ScanCommand,
+    getOctenKey: async () => '', now: () => NOW,
+  });
+  const bySlug = await plane.get('maui-county-fair-november-7-9-2026-11-07');
+  assert.equal(bySlug.id, EVENT_ID);
+  const byId = await plane.get(EVENT_ID);
+  assert.equal(byId.slug, bySlug.slug);
+  // The sorted listing drops the past event, but its page still resolves.
+  assert.equal((await plane.list()).length, 1);
+  assert.equal((await plane.get('october-cleanup-2026-10-01')).id, 'evt-00000000000000aa');
+  assert.equal(await plane.get('nope-2026-01-01'), null);
+  assert.equal(await plane.get(''), null);
+});
+
+const CHAT_IDENTITY = { authorKey: 'f'.repeat(64), name: 'Keoni', photoURL: 'https://img.test/keoni.png' };
+
+test('postChat requires a signed-in identity, a real event, and bounded text', async () => {
+  const puts = [];
+  const plane = createEventsPlane({
+    client: fakePlaneClient({ puts }), table: 't',
+    PutCommand, QueryCommand, ScanCommand,
+    getOctenKey: async () => '', now: () => NOW,
+  });
+  assert.equal((await plane.postChat(null, EVENT_ID, { text: 'aloha' })).status, 401);
+  assert.equal((await plane.postChat({ authorKey: 'short', name: 'x' }, EVENT_ID, { text: 'aloha' })).status, 401);
+  assert.equal((await plane.postChat(CHAT_IDENTITY, 'evt-ffffffffffffffff', { text: 'aloha' })).status, 404);
+  assert.equal((await plane.postChat(CHAT_IDENTITY, EVENT_ID, { text: '   ' })).status, 400);
+
+  const posted = await plane.postChat(CHAT_IDENTITY, EVENT_ID, { text: '  aloha\u0000  kakou\n\nsee you there  ' });
+  assert.equal(posted.status, 201);
+  assert.equal(posted.body.message.text, 'aloha kakou see you there');
+  assert.equal(posted.body.message.name, 'Keoni');
+  assert.equal(posted.body.message.authorKey, CHAT_IDENTITY.authorKey);
+  // One message item + one presence touch, both in the event's chat partition with TTLs.
+  const [messageItem, seenItem] = puts;
+  assert.equal(messageItem.PK, `EVTCHAT#${EVENT_ID}`);
+  assert.match(messageItem.SK, /^MSG#2026-10-28T02:00:00\.000Z#[a-f0-9]{8}$/);
+  assert.ok(messageItem.ttl > NOW.getTime() / 1000);
+  assert.equal(seenItem.SK, `SEEN#${CHAT_IDENTITY.authorKey}`);
+  assert.equal(seenItem.lastSeenAt, NOW.toISOString());
+  assert.ok(seenItem.ttl > NOW.getTime() / 1000);
+
+  const long = await plane.postChat(CHAT_IDENTITY, EVENT_ID, { text: 'a'.repeat(5000) });
+  assert.equal(long.body.message.text.length, 400);
+});
+
+test('chat lists messages in order with presence, and the raw uid never appears', async () => {
+  const partition = `EVTCHAT#${EVENT_ID}`;
+  const chatItems = [
+    {
+      PK: partition, SK: 'MSG#2026-10-28T01:00:00.000Z#aaaaaaaa', authorKey: 'f'.repeat(64),
+      name: 'Keoni', photoURL: 'https://img.test/keoni.png', text: 'Aloha!', createdAt: '2026-10-28T01:00:00.000Z',
+    },
+    {
+      PK: partition, SK: 'MSG#2026-10-28T00:30:00.000Z#bbbbbbbb', authorKey: 'e'.repeat(64),
+      name: 'Ava', text: 'See you at the fair', createdAt: '2026-10-28T00:30:00.000Z',
+    },
+    // Live heartbeat (seconds old) and a stale one (days old — dropped).
+    { PK: partition, SK: `SEEN#${'f'.repeat(64)}`, authorKey: 'f'.repeat(64), name: 'Keoni', lastSeenAt: '2026-10-28T01:59:30.000Z' },
+    { PK: partition, SK: `SEEN#${'c'.repeat(64)}`, authorKey: 'c'.repeat(64), name: 'Old Timer', lastSeenAt: '2026-10-20T00:00:00.000Z' },
+  ];
+  const plane = createEventsPlane({
+    client: fakePlaneClient({ optIns: chatItems }), table: 't',
+    PutCommand, QueryCommand, ScanCommand,
+    getOctenKey: async () => '', now: () => NOW,
+  });
+  const out = await plane.chat(EVENT_ID);
+  assert.equal(out.status, 200);
+  assert.equal(out.body.event.id, EVENT_ID);
+  assert.equal(out.body.now, NOW.toISOString());
+  assert.deepEqual(out.body.messages.map((m) => m.text), ['See you at the fair', 'Aloha!']);
+  assert.equal(out.body.messages[0].photoURL, null);
+  assert.deepEqual(out.body.presence.map((p) => p.name), ['Keoni']);
+  assert.ok(!JSON.stringify(out.body).includes('USER#'));
+
+  assert.equal((await plane.chat('evt-ffffffffffffffff')).status, 404);
+});
+
+test('presence heartbeat stamps the caller and returns the same payload as chat', async () => {
+  const puts = [];
+  const plane = createEventsPlane({
+    client: fakePlaneClient({ puts }), table: 't',
+    PutCommand, QueryCommand, ScanCommand,
+    getOctenKey: async () => '', now: () => NOW,
+  });
+  assert.equal((await plane.presence(null, EVENT_ID)).status, 401);
+  const out = await plane.presence(CHAT_IDENTITY, 'maui-county-fair-november-7-9-2026-11-07');
+  assert.equal(out.status, 200);
+  assert.ok(Array.isArray(out.body.messages));
+  assert.equal(puts.at(-1).SK, `SEEN#${CHAT_IDENTITY.authorKey}`);
+});
+
+test('a visitor match seeded by an event echoes the event (slug + exact date) back', async () => {
+  const locals = [{
+    PK: 'LOCAL#kai', SK: 'META', entityId: 'kai', name: 'Kai', town: 'Paia',
+    interests: ['ocean'], causes: ['ocean'], status: 'verified', verified: true,
+  }];
+  const cause = {
+    PK: 'CAUSE#reef', SK: 'META', entityId: 'reef',
+    title: 'Restore the reef', summary: 'A source-backed need.',
+    nonprofit: 'Maui Helpers', nonprofitId: 'maui-helpers',
+    causeTags: ['ocean'], urgency: 3,
+    url: 'https://example.test/reef', source: 'test-feed',
+    fetchedAt: '2026-10-27T00:00:00.000Z', status: 'verified', verified: true,
+  };
+  const store = {
+    async list(prefix) {
+      if (prefix === 'LOCAL') return locals;
+      if (prefix === 'CAUSE') return [cause];
+      return [];
+    },
+    async put(prefix, fields) {
+      return { ...fields, id: `${prefix}-id`, createdAt: NOW.toISOString(), updatedAt: NOW.toISOString() };
+    },
+  };
+  const eventsPlane = createEventsPlane({
+    client: fakePlaneClient(), table: 't',
+    PutCommand, QueryCommand, ScanCommand,
+    getOctenKey: async () => '', now: () => NOW,
+  });
+  const api = createPublicApi({ store, events: eventsPlane });
+  const seeded = await api.handle({
+    method: 'POST', path: '/api/visitors',
+    rawBody: JSON.stringify({ name: 'Ava', interests: ['ocean'], eventId: EVENT_ID }),
+  });
+  assert.equal(seeded.statusCode, 201);
+  assert.equal(seeded.body.event.id, EVENT_ID);
+  assert.equal(seeded.body.event.slug, 'maui-county-fair-november-7-9-2026-11-07');
+  assert.equal(seeded.body.event.startsAt, '2026-11-07');
+  assert.equal(seeded.body.match.eventOptIn, false);
+
+  const unseeded = await api.handle({
+    method: 'POST', path: '/api/visitors',
+    rawBody: JSON.stringify({ name: 'Ben', interests: ['ocean'] }),
+  });
+  assert.equal(unseeded.body.event, null);
 });

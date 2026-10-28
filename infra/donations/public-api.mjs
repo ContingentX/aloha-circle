@@ -365,6 +365,9 @@ export function createPublicApi({ store, events = null }) {
     // locals who opted into that event outrank tag overlap alone.
     const eventId = body.eventId == null ? null : opaqueId(body.eventId);
     const eventOptInKeys = eventId && events ? await events.optInKeys(eventId) : null;
+    // Echo the event back (exact date, slug for /e/<slug>) so the match card
+    // can say precisely what was matched around — honesty beats vibes.
+    const matchedEvent = eventId && typeof events?.get === 'function' ? await events.get(eventId) : null;
     const visitor = await store.put('VISITOR', {
       name,
       interests,
@@ -378,7 +381,7 @@ export function createPublicApi({ store, events = null }) {
     const match = ranked
       ? await store.put('MATCH', { ...ranked, ...(eventId ? { eventId } : {}) }, { ttlDays: 30 })
       : null;
-    return result(201, { visitor, match, derivedInterests });
+    return result(201, { visitor, match, event: matchedEvent, derivedInterests });
   }
 
   async function createLocal(body, clientKey) {

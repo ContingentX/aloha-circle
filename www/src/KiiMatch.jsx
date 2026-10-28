@@ -1,17 +1,41 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
 import { KII_HOME, completeMaskyCallback, maskyLogin } from './kii.js';
+import { cleanTitle, formatRange } from './Events.jsx';
 
 const AGENT_CONSOLE_URL = import.meta.env.VITE_AGENT_CONSOLE_URL ?? '/agent-console';
 
-export function MatchCard({ match, agent }) {
+// The match card tells the truth: the suggested action is the cause's own
+// call-to-action (not "today"), and when the match was seeded by an event it
+// shows the event's exact date, says plainly whether the local actually
+// RSVPed, and links to the event page — where the chat is how you find each
+// other.
+export function MatchCard({ match, agent, event = null }) {
+  const when = event ? formatRange(event.startsAt, event.endsAt) : null;
   return (
     <div className="card match-card">
       <h3>🌊 Your Maui Match</h3>
-      <p><strong>Meet:</strong> {match.localName}, {match.localTown}</p>
+      <p><strong>Meet:</strong> {match.localName}{match.localTown ? `, ${match.localTown}` : ''}</p>
       <p><strong>Cause:</strong> {match.cause}</p>
       <p><strong>Why:</strong> {match.why}</p>
-      <p><strong>Today:</strong> {match.suggestedAction}</p>
+      <p><strong>Do together:</strong> {match.suggestedAction}</p>
+      {event && (
+        <div className="match-event">
+          <p className="match-event-when">
+            <strong>{cleanTitle(event.title, event.domain)}</strong>
+            {' — '}
+            {when ?? 'island time (no set date — confirm with the organizer)'}
+          </p>
+          <p className="hint">
+            {match.eventOptIn
+              ? `${match.localName} has said "I'm in" for this event — they plan to be there.`
+              : `No local has RSVPed to this event yet — ${match.localName} matched with you on shared causes, not this date.`}
+          </p>
+          <a className="cta event-cta" href={`/e/${event.slug}`}>
+            Open the event page to say aloha & plan the meetup →
+          </a>
+        </div>
+      )}
       {agent && (
         <div className="agent-receipt">
           <p><strong>Named TrueForge agent:</strong> <code>{agent.name}</code></p>

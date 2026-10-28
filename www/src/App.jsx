@@ -8,7 +8,6 @@ import { World } from './World.jsx';
 import { AlohaCircle } from './AlohaCircle.jsx';
 import { KiiMatch, MatchCard } from './KiiMatch.jsx';
 import { HappeningOnMaui, LocalEventPlanner, cleanTitle } from './Events.jsx';
-import { FEATURED_NONPROFITS } from './nonprofits.js';
 
 const TRUEFORGE_DEMO_ENABLED = import.meta.env.VITE_TRUEFORGE_DEMO === 'true';
 
@@ -41,6 +40,7 @@ function VisitorTab({ seed = null, onClearSeed = null }) {
   const [name, setName] = useState('');
   const [interests, setInterests] = useState([]);
   const [match, setMatch] = useState(null);
+  const [matchEvent, setMatchEvent] = useState(null);
   const [agent, setAgent] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -52,23 +52,12 @@ function VisitorTab({ seed = null, onClearSeed = null }) {
     if (!seed) return;
     setInterests(seed.causeTags ?? []);
     setMatch(null);
+    setMatchEvent(null);
     setError(null);
   }, [seed?.id]);
 
   const toggle = (tag) =>
     setInterests((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
-
-  const fallbackMatch = () => {
-    const nonprofit = FEATURED_NONPROFITS.find((item) =>
-      item.causeTags.some((tag) => interests.includes(tag))) ?? FEATURED_NONPROFITS[0];
-    return {
-      localName: 'Leilani',
-      localTown: 'Paia',
-      cause: nonprofit.name,
-      why: `You picked ${interests.join(', ')} - ${nonprofit.tagline}.`,
-      suggestedAction: nonprofit.experience,
-    };
-  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -82,20 +71,19 @@ function VisitorTab({ seed = null, onClearSeed = null }) {
       );
       if (!result.match) throw new Error('No eligible Maui match is available yet.');
       setMatch(result.match);
+      setMatchEvent(result.event ?? null);
       setAgent(TRUEFORGE_DEMO_ENABLED ? result.agent : null);
     } catch (requestError) {
-      if (TRUEFORGE_DEMO_ENABLED) {
-        setError(requestError instanceof Error ? requestError.message : 'Matching failed.');
-      } else {
-        setMatch(fallbackMatch());
-      }
+      // Matches are real people or nothing — never invent one when the API
+      // can't deliver (a demo-era fallback here used to fabricate "Leilani").
+      setError(requestError instanceof Error ? requestError.message : 'Matching failed.');
     } finally {
       setBusy(false);
     }
   };
 
   if (match) {
-    return <MatchCard match={match} agent={agent} />;
+    return <MatchCard match={match} agent={agent} event={matchEvent} />;
   }
 
   return (
@@ -368,6 +356,17 @@ export default function App() {
       document.getElementById('meet-maui')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   };
+
+  // Arriving from an event page's "find a local" CTA (/?e=<id or slug>): load
+  // that event and seed the matcher with it, same as clicking its card here.
+  useEffect(() => {
+    const seedParam = new URLSearchParams(window.location.search).get('e');
+    if (!seedParam || !/^[a-z0-9-]{1,120}$/i.test(seedParam)) return;
+    window.history.replaceState({}, '', window.location.pathname + window.location.hash);
+    api.get(`/api/events/${encodeURIComponent(seedParam)}`)
+      .then((event) => { if (event?.id) goWithLocal(event); })
+      .catch(() => {});
+  }, []);
 
   return (
     <AuthProvider>
