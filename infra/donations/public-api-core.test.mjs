@@ -145,6 +145,7 @@ test('rankMatch ignores unverified locals and endorsements', () => {
     urgencyPoints: 3,
     endorsementRawScore: 0,
     endorsementPoints: 0,
+    eventOptInPoints: 0,
     total: 10,
   });
   assert.equal(rankMatch(

@@ -217,7 +217,7 @@ const candidateComesFirst = (candidate, current) => {
   return localOrder < 0 || (localOrder === 0 && candidate.cause.id.localeCompare(current.cause.id) < 0);
 };
 
-export function rankMatch(visitor, { locals = [], causes = [], endorsements = [] }) {
+export function rankMatch(visitor, { locals = [], causes = [], endorsements = [], eventOptInKeys = null }) {
   const visitorInterests = stringList(visitor?.interests);
   if (!visitor?.id || !visitor?.name || visitorInterests.length === 0) return null;
 
@@ -235,16 +235,23 @@ export function rankMatch(visitor, { locals = [], causes = [], endorsements = []
       const localCauseFit = overlap(local.causes, cause.causeTags);
       const visitorCauseFit = overlap(visitorInterests, cause.causeTags);
       const trust = endorsementScore(cause, trustedEndorsements);
+      // A local who already opted into the visitor's chosen event outranks
+      // tag overlap alone — the site's promise is "go with a local who is
+      // actually going".
+      const eventOptIn = eventOptInKeys instanceof Set &&
+        typeof local.ownerKey === 'string' && eventOptInKeys.has(local.ownerKey);
       const score =
         sharedInterests.length * 3 +
         localCauseFit.length * 2 +
         visitorCauseFit.length * 2 +
         cause.urgency +
-        Math.min(trust, 5);
+        Math.min(trust, 5) +
+        (eventOptIn ? 5 : 0);
       const candidate = {
         local,
         cause,
         sharedInterests,
+        eventOptIn,
         score,
         scoreReceipt: {
           sharedInterestCount: sharedInterests.length,
@@ -257,6 +264,7 @@ export function rankMatch(visitor, { locals = [], causes = [], endorsements = []
           urgencyPoints: cause.urgency,
           endorsementRawScore: trust,
           endorsementPoints: Math.min(trust, 5),
+          eventOptInPoints: eventOptIn ? 5 : 0,
           total: score,
         },
       };
@@ -268,11 +276,14 @@ export function rankMatch(visitor, { locals = [], causes = [], endorsements = []
   const suggestedAction = best.cause.action ??
     `Ask ${best.local.name} how to help with "${best.cause.title}".`;
   const why = [
+    best.eventOptIn
+      ? `${best.local.name} already plans to be at this event.`
+      : null,
     best.sharedInterests.length
       ? `You and ${best.local.name} both care about ${best.sharedInterests.join(' and ')}.`
       : `${best.local.name} knows this cause well.`,
     best.cause.summary,
-  ].join(' ');
+  ].filter(Boolean).join(' ');
 
   return {
     visitorId: visitor.id,
@@ -285,6 +296,7 @@ export function rankMatch(visitor, { locals = [], causes = [], endorsements = []
     causeTags: best.cause.causeTags,
     why,
     suggestedAction,
+    eventOptIn: best.eventOptIn === true,
     score: best.score,
     scoreReceipt: best.scoreReceipt,
     blocks: [

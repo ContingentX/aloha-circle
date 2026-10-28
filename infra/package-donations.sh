@@ -15,9 +15,10 @@ fi
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 (cd "$ROOT/infra/donations" && zip -q -j "$OUTPUT" \
-  index.mjs public-api.mjs public-api-core.mjs)
+  index.mjs public-api.mjs public-api-core.mjs \
+  events.mjs events-core.mjs events-sources.json)
 
-EXPECTED=$'index.mjs\npublic-api-core.mjs\npublic-api.mjs'
+EXPECTED=$'events-core.mjs\nevents-sources.json\nevents.mjs\nindex.mjs\npublic-api-core.mjs\npublic-api.mjs'
 ACTUAL="$(unzip -Z1 "$OUTPUT" | LC_ALL=C sort)"
 if [[ "$ACTUAL" != "$EXPECTED" ]]; then
   echo "error: Lambda package contents differ from the reviewed module set" >&2

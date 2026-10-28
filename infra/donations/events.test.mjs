@@ -1,0 +1,345 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {
+  eventIdForUrl,
+  extractEventDates,
+  sortPublicEvents,
+  toEventRecord,
+  toPublicEvent,
+  validateEventSourceConfig,
+} from './events-core.mjs';
+import { createEventsPlane, loadEventSources } from './events.mjs';
+import { createPublicApi } from './public-api.mjs';
+
+const NOW = new Date('2026-10-28T02:00:00.000Z');
+
+class PutCommand { constructor(input) { this.input = input; } }
+class ScanCommand { constructor(input) { this.input = input; } }
+class QueryCommand { constructor(input) { this.input = input; } }
+
+// ---- date extraction ----------------------------------------------------------
+
+test('extractEventDates reads common forms and resolves missing years forward', () => {
+  assert.deepEqual(extractEventDates('Maui County Fair November 7', NOW), { startsAt: '2026-11-07' });
+  assert.deepEqual(extractEventDates('Nov. 7th craft fair in Wailuku', NOW), { startsAt: '2026-11-07' });
+  assert.deepEqual(
+    extractEventDates('Festivals of Aloha Nov 7-9 in Hana', NOW),
+    { startsAt: '2026-11-07', endsAt: '2026-11-09' },
+  );
+  assert.deepEqual(
+    extractEventDates('Runs November 28 – December 2 at the MACC', NOW),
+    { startsAt: '2026-11-28', endsAt: '2026-12-02' },
+  );
+  assert.deepEqual(extractEventDates('Workshop on 2026-12-05 at UH Maui', NOW), { startsAt: '2026-12-05' });
+  assert.deepEqual(extractEventDates('Beach cleanup 11/14 at Baldwin', NOW), { startsAt: '2026-11-14' });
+  assert.deepEqual(extractEventDates('Gala on 7 November 2026', NOW), { startsAt: '2026-11-07' });
+  // A yearless date months in the past belongs to next year.
+  assert.deepEqual(extractEventDates('Whale festival February 14', NOW), { startsAt: '2027-02-14' });
+  // A date a few weeks back stays in the current year (event just happened).
+  assert.deepEqual(extractEventDates('Recap: October 4 fair', NOW), { startsAt: '2026-10-04' });
+});
+
+test('extractEventDates stays conservative: idioms and junk produce no date', () => {
+  assert.equal(extractEventDates('Hotline open 24/7 for visitors', NOW), null);
+  assert.equal(extractEventDates('Top 10 things to do on Maui', NOW), null);
+  assert.equal(extractEventDates('February 31 never happens', NOW), null);
+  assert.equal(extractEventDates('', NOW), null);
+});
+
+// ---- normalisation ------------------------------------------------------------
+
+const SOURCE = { sourceId: 'octen-maui-happenings', causeTags: ['events', 'community'], urgency: 2 };
+
+test('toEventRecord normalises an Octen result with provenance and extracted dates', () => {
+  const record = toEventRecord({
+    title: '  Maui County Fair \n returns November 7-9  ',
+    url: 'https://www.mauicountyfair.com/schedule',
+    highlight: 'Rides, livestock, and local food booths all weekend.',
+    time_last_crawled: '2026-10-27T18:00:00Z',
+  }, SOURCE, NOW);
+  assert.equal(record.title, 'Maui County Fair returns November 7-9');
+  assert.equal(record.domain, 'mauicountyfair.com');
+  assert.equal(record.startsAt, '2026-11-07');
+  assert.equal(record.endsAt, '2026-11-09');
+  assert.equal(record.fetchedAt, '2026-10-27T18:00:00.000Z');
+  assert.deepEqual(record.causeTags, ['events', 'community']);
+  assert.equal(record.status, 'live');
+  assert.equal(record.verified, true);
+});
+
+test('toEventRecord rejects non-https results and falls back to an undated card', () => {
+  assert.equal(toEventRecord({ title: 'x', url: 'http://insecure.test/' }, SOURCE, NOW), null);
+  const undated = toEventRecord({
+    title: 'Volunteer with the humane society',
+    url: 'https://hawaiianhumane.test/volunteer',
+  }, SOURCE, NOW);
+  assert.equal(undated.startsAt, undefined);
+  assert.equal(undated.summary, 'Volunteer with the humane society');
+});
+
+test('toPublicEvent validates stored records and drops tampered ones', () => {
+  const stored = {
+    ...toEventRecord({
+      title: 'Lahaina replanting day December 5',
+      url: 'https://mauinow.test/replant',
+      highlight: 'Join the watershed crew.',
+    }, SOURCE, NOW),
+    entityId: eventIdForUrl('https://mauinow.test/replant'),
+  };
+  const card = toPublicEvent(stored);
+  assert.equal(card.startsAt, '2026-12-05');
+  assert.equal(card.domain, 'mauinow.test');
+  assert.equal(toPublicEvent({ ...stored, verified: false }), null);
+  assert.equal(toPublicEvent({ ...stored, entityId: 'not-an-event-id' }), null);
+});
+
+test('sortPublicEvents puts dated upcoming first, keeps ranges in progress, drops the past', () => {
+  const event = (id, extra) => ({
+    id, title: id, summary: id, url: `https://x.test/${id}`, domain: 'x.test',
+    source: 's', causeTags: ['events'], urgency: 2,
+    fetchedAt: '2026-10-27T00:00:00.000Z', startsAt: null, endsAt: null, ...extra,
+  });
+  const sorted = sortPublicEvents([
+    event('undated-old', { fetchedAt: '2026-10-20T00:00:00.000Z' }),
+    event('past', { startsAt: '2026-10-01' }),
+    event('running-range', { startsAt: '2026-10-20', endsAt: '2026-11-01' }),
+    event('soon', { startsAt: '2026-11-07' }),
+    event('later', { startsAt: '2026-12-05' }),
+    event('undated-fresh', { fetchedAt: '2026-10-27T12:00:00.000Z' }),
+  ], NOW);
+  assert.deepEqual(sorted.map((item) => item.id),
+    ['running-range', 'soon', 'later', 'undated-fresh', 'undated-old']);
+});
+
+test('the shipped events-sources.json entries all validate', () => {
+  const sources = loadEventSources();
+  assert.ok(sources.length >= 1);
+  for (const source of sources) {
+    assert.ok(validateEventSourceConfig(source), `source ${source.id} must validate`);
+  }
+});
+
+// ---- events plane (fake Dynamo) ------------------------------------------------
+
+const EVENT_URL = 'https://mauinow.test/fair';
+const EVENT_ID = eventIdForUrl(EVENT_URL);
+const storedEvent = {
+  PK: `EVENT#${EVENT_ID}`, SK: 'META', entityId: EVENT_ID,
+  title: 'Maui County Fair November 7-9', summary: 'All weekend at the fairgrounds.',
+  url: EVENT_URL, source: 'octen-maui-happenings', causeTags: ['events', 'community'],
+  urgency: 2, fetchedAt: '2026-10-27T18:00:00.000Z',
+  startsAt: '2026-11-07', endsAt: '2026-11-09', status: 'live', verified: true,
+};
+
+function fakePlaneClient({ events = [storedEvent], optIns = [], puts = [], queries = [] } = {}) {
+  return {
+    puts,
+    async send(command) {
+      if (command instanceof PutCommand) {
+        puts.push(command.input.Item);
+        return {};
+      }
+      if (command instanceof QueryCommand) {
+        queries.push(command.input);
+        return { Items: optIns.filter((item) => item.PK === command.input.ExpressionAttributeValues[':pk']) };
+      }
+      return { Items: [...events, ...optIns] };
+    },
+  };
+}
+
+test('list merges live events with local going counts; opt-outs do not count', async () => {
+  const optIns = [
+    { PK: 'USER#a', SK: `OPTIN#${EVENT_ID}`, eventId: EVENT_ID, going: true, ownerKey: 'a'.repeat(64) },
+    { PK: 'USER#b', SK: `OPTIN#${EVENT_ID}`, eventId: EVENT_ID, going: true, ownerKey: 'b'.repeat(64) },
+    { PK: 'USER#c', SK: `OPTIN#${EVENT_ID}`, eventId: EVENT_ID, going: false, ownerKey: 'c'.repeat(64) },
+  ];
+  const plane = createEventsPlane({
+    client: fakePlaneClient({ optIns }), table: 't',
+    PutCommand, QueryCommand, ScanCommand,
+    getOctenKey: async () => '', now: () => NOW,
+  });
+  const events = await plane.list();
+  assert.equal(events.length, 1);
+  assert.equal(events[0].id, EVENT_ID);
+  assert.equal(events[0].localsGoing, 2);
+  const keys = await plane.optInKeys(EVENT_ID);
+  assert.deepEqual([...keys].sort(), ['a'.repeat(64), 'b'.repeat(64)]);
+});
+
+test('setOptIn validates the event, snapshots it, and stamps the hashed identity', async () => {
+  const puts = [];
+  const plane = createEventsPlane({
+    client: fakePlaneClient({ puts }), table: 't',
+    PutCommand, QueryCommand, ScanCommand,
+    getOctenKey: async () => '', now: () => NOW,
+  });
+  assert.equal((await plane.setOptIn('uid-1', { eventId: 'nope' })).status, 400);
+  assert.equal((await plane.setOptIn('uid-1', { eventId: eventIdForUrl('https://other.test/') })).status, 404);
+  const ok = await plane.setOptIn('uid-1', { eventId: EVENT_ID, going: true });
+  assert.equal(ok.status, 200);
+  const item = puts.at(-1);
+  assert.equal(item.PK, 'USER#uid-1');
+  assert.equal(item.SK, `OPTIN#${EVENT_ID}`);
+  assert.equal(item.going, true);
+  assert.equal(item.title, storedEvent.title);
+  assert.equal(item.startsAt, '2026-11-07');
+  assert.match(item.ownerKey, /^[a-f0-9]{64}$/);
+});
+
+test('listOptIns queries only the caller partition and sorts dated plans first', async () => {
+  const optIns = [
+    {
+      PK: 'USER#uid-1', SK: 'OPTIN#evt-aaaaaaaaaaaaaaaa', eventId: 'evt-aaaaaaaaaaaaaaaa',
+      going: true, title: 'Undated find', startsAt: null, updatedAt: '2026-10-27T00:00:00.000Z',
+    },
+    {
+      PK: 'USER#uid-1', SK: `OPTIN#${EVENT_ID}`, eventId: EVENT_ID, going: true,
+      title: 'Fair', startsAt: '2026-11-07', endsAt: '2026-11-09',
+    },
+    { PK: 'USER#other', SK: `OPTIN#${EVENT_ID}`, eventId: EVENT_ID, going: true },
+  ];
+  const plane = createEventsPlane({
+    client: fakePlaneClient({ optIns }), table: 't',
+    PutCommand, QueryCommand, ScanCommand,
+    getOctenKey: async () => '', now: () => NOW,
+  });
+  const result = await plane.listOptIns('uid-1');
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body.map((item) => item.title), ['Fair', 'Undated find']);
+});
+
+test('refresh publishes EVENT# records with stable ids and reports per-source failures', async () => {
+  const puts = [];
+  const octenPayload = {
+    code: 0,
+    data: {
+      results: [
+        { title: 'Fair November 7', url: EVENT_URL, highlight: 'Fun.' },
+        { title: 'Dupe of the fair', url: EVENT_URL, highlight: 'Same URL.' },
+        { title: 'bad', url: 'http://insecure.test/' },
+      ],
+    },
+  };
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls += 1;
+    if (calls === 2) throw new Error('socket hang up');
+    return { ok: true, json: async () => octenPayload };
+  };
+  const plane = createEventsPlane({
+    client: fakePlaneClient({ puts }), table: 't',
+    PutCommand, QueryCommand, ScanCommand,
+    getOctenKey: async () => 'octen-test-key', fetchImpl, now: () => NOW,
+  });
+  const sources = [
+    { id: 'one', enabled: true, octen: { query: 'q1', causeTags: ['events'], urgency: 2 } },
+    { id: 'two', enabled: true, octen: { query: 'q2', causeTags: ['events'], urgency: 2 } },
+    { id: 'off', enabled: false, octen: { query: 'q3', causeTags: ['events'], urgency: 2 } },
+  ];
+  const summary = await plane.refresh({ sources });
+  assert.equal(summary.published, 1);
+  assert.deepEqual(summary.failures, ['two: socket hang up']);
+  assert.equal(puts.length, 1);
+  assert.equal(puts[0].PK, `EVENT#${EVENT_ID}`);
+  assert.equal(puts[0].entityType, 'event');
+  assert.ok(puts[0].ttl > NOW.getTime() / 1000);
+});
+
+test('refresh without a configured key is a safe no-op', async () => {
+  const puts = [];
+  const plane = createEventsPlane({
+    client: fakePlaneClient({ puts }), table: 't',
+    PutCommand, QueryCommand, ScanCommand,
+    getOctenKey: async () => '', fetchImpl: async () => { throw new Error('must not be called'); },
+    now: () => NOW,
+  });
+  const summary = await plane.refresh({ sources: loadEventSources() });
+  assert.equal(summary.published, 0);
+  assert.equal(puts.length, 0);
+  assert.equal(summary.failures.length, 1);
+});
+
+// ---- matcher integration -------------------------------------------------------
+
+test('a visitor arriving from an event card matches the local who opted into it', async () => {
+  const ownerKey = 'd'.repeat(64);
+  const locals = [
+    {
+      PK: 'LOCAL#kai', SK: 'META', entityId: 'kai', name: 'Kai', town: 'Paia',
+      interests: ['ocean'], causes: ['ocean'], status: 'verified', verified: true,
+    },
+    {
+      PK: 'LOCAL#lani', SK: 'META', entityId: 'lani', name: 'Lani', town: 'Kihei',
+      interests: ['ocean'], causes: ['ocean'], status: 'verified', verified: true,
+      ownerKey,
+    },
+  ];
+  const cause = {
+    PK: 'CAUSE#reef', SK: 'META', entityId: 'reef',
+    title: 'Restore the reef', summary: 'A source-backed need.',
+    nonprofit: 'Maui Helpers', nonprofitId: 'maui-helpers',
+    causeTags: ['ocean'], urgency: 3,
+    url: 'https://example.test/reef', source: 'test-feed',
+    fetchedAt: '2026-10-27T00:00:00.000Z', status: 'verified', verified: true,
+  };
+  const store = {
+    async list(prefix) {
+      if (prefix === 'LOCAL') return locals;
+      if (prefix === 'CAUSE') return [cause];
+      return [];
+    },
+    async put(prefix, fields) {
+      return { ...fields, id: `${prefix}-id`, createdAt: NOW.toISOString(), updatedAt: NOW.toISOString() };
+    },
+  };
+  const events = { optInKeys: async (eventId) => (eventId === EVENT_ID ? new Set([ownerKey]) : new Set()) };
+  const api = createPublicApi({ store, events });
+
+  const boosted = await api.handle({
+    method: 'POST', path: '/api/visitors',
+    rawBody: JSON.stringify({ name: 'Ava', interests: ['ocean'], eventId: EVENT_ID }),
+  });
+  assert.equal(boosted.statusCode, 201);
+  assert.equal(boosted.body.match.localName, 'Lani');
+  assert.equal(boosted.body.match.eventOptIn, true);
+  assert.equal(boosted.body.match.eventId, EVENT_ID);
+  assert.match(boosted.body.match.why, /already plans to be at this event/);
+
+  // Without the event context, deterministic tiebreak picks the first local id.
+  const neutral = await api.handle({
+    method: 'POST', path: '/api/visitors',
+    rawBody: JSON.stringify({ name: 'Ben', interests: ['ocean'] }),
+  });
+  assert.equal(neutral.body.match.localName, 'Kai');
+  assert.equal(neutral.body.match.eventOptIn, false);
+});
+
+test('a signed-in local join stores the hashed identity without echoing it back', async () => {
+  const puts = [];
+  const store = {
+    async list() { return []; },
+    async put(prefix, fields) {
+      puts.push({ prefix, fields });
+      return { ...fields, id: 'local-id', createdAt: NOW.toISOString(), updatedAt: NOW.toISOString() };
+    },
+  };
+  const api = createPublicApi({ store });
+  const clientKey = 'e'.repeat(64);
+  const created = await api.handle({
+    method: 'POST', path: '/api/locals',
+    rawBody: JSON.stringify({ name: 'Noe', interests: ['ocean'] }),
+    clientKey,
+  });
+  assert.equal(created.statusCode, 201);
+  assert.equal(puts[0].fields.ownerKey, clientKey);
+  assert.equal(created.body.ownerKey, undefined);
+  assert.equal(created.body.linkedToAccount, true);
+
+  const anonymous = await api.handle({
+    method: 'POST', path: '/api/locals',
+    rawBody: JSON.stringify({ name: 'Ikaika', interests: ['ocean'] }),
+  });
+  assert.equal(anonymous.body.linkedToAccount, false);
+  assert.equal(puts[1].fields.ownerKey, undefined);
+});

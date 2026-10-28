@@ -7,19 +7,24 @@
 //
 // Public:  GET /experiences · POST /donate · GET /spin?session_id=cs_...
 //          GET /api/health · GET /api/nonprofits · GET /api/causes
+//          GET /api/events (Happening on Maui plane, Octen-refreshed)
 //          POST /api/visitors · POST /api/locals · POST /api/endorsements
 // Authed:  GET /me · POST /profile · POST /npo/claim · POST /npo/send-code
 //          POST /npo/verify-code · POST /local/submit · POST /local/confirm
+//          GET /local/optins · POST /local/optin {eventId, going}
 //          POST /api/nonprofits (one pending submission per account/day)
+// Scheduled: EventBridge invokes with {eventsRefresh: true} → Octen searches
+//          from events-sources.json republish the EVENT# records.
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
 import { createVerify, createHash, randomInt, randomUUID } from 'crypto';
 import { PublicApiError, parseJsonObject } from './public-api-core.mjs';
 import { createDynamoPublicStore, createPublicApi } from './public-api.mjs';
+import { createEventsPlane } from './events.mjs';
 
 const ssm = new SSMClient({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -295,7 +300,18 @@ const publicStore = createDynamoPublicStore({
   ScanCommand,
   randomId: randomUUID,
 });
-const publicApi = createPublicApi({ store: publicStore });
+// "Happening on Maui" events plane: EVENT# records written by the scheduled
+// Octen refresh, listed publicly, with signed-in local opt-ins (OPTIN# items
+// under the user's partition). See events.mjs / events-sources.json.
+const eventsPlane = createEventsPlane({
+  client: ddb,
+  table: TABLE,
+  PutCommand,
+  QueryCommand,
+  ScanCommand,
+  getOctenKey: () => param('/alohalive/prod/OCTEN_API_KEY').catch(() => ''),
+});
+const publicApi = createPublicApi({ store: publicStore, events: eventsPlane });
 
 // ---- experiences ----
 async function listExperiences(origin) {
@@ -440,15 +456,32 @@ export const handler = async (event) => {
     return parsedBody;
   };
   try {
+    // Scheduled events refresh (EventBridge rule, not an HTTP request).
+    if (event?.eventsRefresh === true) {
+      const summary = await eventsPlane.refresh();
+      console.log('events refresh:', JSON.stringify(summary));
+      return summary;
+    }
     if (method === 'OPTIONS') return resp(204, {}, origin);
     if (method === 'GET' && path === '/experiences') return await listExperiences(origin);
+    if (method === 'GET' && path === '/api/events') return resp(200, await eventsPlane.list(), origin);
     if (method === 'POST' && path === '/donate') return await donate(body(), origin);
     if (method === 'GET' && path === '/spin') {
       return await spin(new URLSearchParams(event.rawQueryString ?? '').get('session_id'), origin);
     }
     const authenticatedPublicSubmission = method === 'POST' && path === '/api/nonprofits';
     if (!authenticatedPublicSubmission) {
-      const publicResult = await publicApi.handle({ method, path, rawBody: event.body });
+      // /api/locals stays open to anonymous submissions, but when a valid
+      // sign-in rides along, pass the hashed identity so the LOCAL record can
+      // be linked to the same account's event opt-ins.
+      let optionalClientKey;
+      if (method === 'POST' && path === '/api/locals') {
+        const optionalUser = await verifyToken(event.headers);
+        if (optionalUser) optionalClientKey = sha256(`firebase:${optionalUser.uid}`);
+      }
+      const publicResult = await publicApi.handle({
+        method, path, rawBody: event.body, clientKey: optionalClientKey,
+      });
       if (publicResult) return resp(publicResult.statusCode, publicResult.body, origin);
     }
 
@@ -471,6 +504,14 @@ export const handler = async (event) => {
     if (method === 'POST' && path === '/npo/verify-code') return await npoVerifyCode(user, requestBody, origin);
     if (method === 'POST' && path === '/local/submit') return await localSubmit(user, requestBody, origin);
     if (method === 'POST' && path === '/local/confirm') return await localConfirm(user, requestBody, origin);
+    if (method === 'GET' && path === '/local/optins') {
+      const optIns = await eventsPlane.listOptIns(user.uid);
+      return resp(optIns.status, optIns.body, origin);
+    }
+    if (method === 'POST' && path === '/local/optin') {
+      const optIn = await eventsPlane.setOptIn(user.uid, requestBody);
+      return resp(optIn.status, optIn.body, origin);
+    }
     if (method === 'POST' && path === '/experiences') return await createExperience(user, requestBody, origin);
     return resp(404, { error: 'not found' }, origin);
   } catch (err) {
