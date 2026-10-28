@@ -1,5 +1,5 @@
 {
-  "note": "Version-controlled scraper settings for the Maui Needs Index (see CLAUDE.md). Bright Data Scraper Studio configs replace the fixture parsers in phase 2; the schema.required contract and needs_repair flagging stay the same.",
+  "note": "Version-controlled scraper settings for the Maui Needs Index (see CLAUDE.md). Live sources use the octen parser (Octen Web Search, needs OCTEN_API_KEY); the schema.required contract and needs_repair flagging stay the same.",
   "sources": [
     {
       "id": "maui-nonprofit-board",
@@ -27,10 +27,38 @@
     },
     {
       "id": "brightdata-live-example",
-      "name": "Injected web source via Bright Data",
+      "name": "Injected web source via Bright Data (superseded by octen sources)",
       "url": "https://example.org/maui-causes",
-      "enabled": true,
+      "enabled": false,
       "parser": "brightdata",
+      "schema": { "required": ["title", "causeTags", "urgency", "summary"] }
+    },
+    {
+      "id": "octen-maui-events",
+      "name": "Maui community events (live via Octen search)",
+      "url": "https://api.octen.ai/search",
+      "enabled": true,
+      "parser": "octen",
+      "octen": {
+        "query": "Maui community events festivals markets this week",
+        "count": 10,
+        "causeTags": ["events", "community", "maui"],
+        "urgency": 2
+      },
+      "schema": { "required": ["title", "causeTags", "urgency", "summary"] }
+    },
+    {
+      "id": "octen-maui-volunteer",
+      "name": "Maui volunteer opportunities (live via Octen search)",
+      "url": "https://api.octen.ai/search",
+      "enabled": true,
+      "parser": "octen",
+      "octen": {
+        "query": "Maui volunteer opportunities nonprofits need help this month",
+        "count": 10,
+        "causeTags": ["volunteer", "community", "maui"],
+        "urgency": 3
+      },
       "schema": { "required": ["title", "causeTags", "urgency", "summary"] }
     }
   ]

@@ -425,46 +425,35 @@ import { ingestOnce } from '../src/ingest.js';
 import { buildAdvisoryContext } from '../src/mem0.js';
 
 const BD_SOURCE_ID = 'brightdata-live-example';
-const bdEnvelope = (records) => ({
-  status: 200,
-  contentType: 'application/json',
-  body: JSON.stringify({ records }),
-});
 
-// 8. Enabled brightdata source with injected adapter+transport ingests with
-// exact adapter provenance; without injection only that source needs_repair.
-test('ingest brightdata seam: injected success keeps provenance; absent injection fails closed per source', async () => {
-  let adapterOptions;
-  const mkAdapter = () => (opts) => ({
-    fetchCauseSignals: async () => {
-      adapterOptions = opts;
-      const { createBrightDataAdapter } = await import('../src/brightdata.js');
-      return createBrightDataAdapter(opts).fetchCauseSignals();
-    },
+// 8. The live provider seam moved from Bright Data to Octen: the shipped
+// brightdata-live-example source is disabled, octen sources ingest with exact
+// provider provenance when a key is injected, and without injection only the
+// octen sources fail closed while fixtures keep running.
+test('ingest live seam: octen sources keep provenance; absent injection fails closed per source', async () => {
+  const octenEnvelope = (results) => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ code: 0, msg: 'success', data: { results } }),
   });
-  const signalRecord = {
+  const octenResult = {
     title: 'Injected reef cleanup',
-    summary: 'Injected volunteers needed.',
-    nonprofit: 'Reef Trust',
-    causeTags: ['reef'],
-    urgency: 3,
-    sourceUrl: SOURCE_URL,
-    fetchedAt: '2026-02-01T10:00:00.000Z',
+    url: 'https://needs.example.org/reef-cleanup',
+    highlight: 'Injected volunteers needed.',
+    time_last_crawled: '2026-02-01T10:00:00.000Z',
   };
   const result = await ingestOnce({
-    brightdata: mkAdapter(),
-    brightdataSources: {
-      [BD_SOURCE_ID]: {
-        url: SOURCE_URL,
-        transport: fakeTransport(bdEnvelope([signalRecord])),
-        credentials: { mustNeverReachAdapter: true },
-      },
-    },
+    octen: { apiKey: 'test-key', fetchImpl: async () => octenEnvelope([octenResult]) },
   });
-  const bd = result.status.find((s) => s.id === BD_SOURCE_ID);
-  assert.equal(bd.state, 'ok', 'injected brightdata source ingests');
-  assert.equal(bd.ingested, 1);
-  assert.ok(!Object.hasOwn(adapterOptions, 'credentials'), 'ingest never forwards credentials');
+  assert.ok(
+    result.status.some((s) => s.id === BD_SOURCE_ID && s.state === 'disabled'),
+    'retired brightdata example source stays disabled',
+  );
+  for (const id of ['octen-maui-events', 'octen-maui-volunteer']) {
+    const entry = result.status.find((s) => s.id === id);
+    assert.equal(entry?.state, 'ok', `octen source ${id} ingests`);
+    assert.equal(entry.ingested, 1);
+  }
   for (const fixture of ['maui-nonprofit-board', 'maui-news-events']) {
     assert.ok(result.status.some((s) => s.id === fixture && s.state === 'ok'), `fixture ${fixture} still ok`);
   }
@@ -476,14 +465,16 @@ test('ingest brightdata seam: injected success keeps provenance; absent injectio
   const { load } = await import('../src/store.js');
   const stored = load('causes').find((c) => c.title === 'Injected reef cleanup');
   assert.ok(stored, 'injected signal was stored');
-  assert.equal(stored.sourceUrl, SOURCE_URL, 'adapter-supplied sourceUrl preserved exactly');
-  assert.equal(stored.fetchedAt, '2026-02-01T10:00:00.000Z', 'adapter-supplied fetchedAt never overwritten with now()');
+  assert.equal(stored.sourceUrl, 'https://needs.example.org/reef-cleanup', 'provider-supplied sourceUrl preserved exactly');
+  assert.equal(stored.fetchedAt, '2026-02-01T10:00:00.000Z', 'provider-supplied fetchedAt never overwritten with now()');
 
-  // Absent injection: only the brightdata source is marked needs_repair.
+  // Absent injection: only the octen sources are marked needs_repair.
   const without = await ingestOnce({});
-  const failed = without.status.find((s) => s.id === BD_SOURCE_ID);
-  assert.equal(failed.state, 'needs_repair');
-  assert.match(failed.detail, /injected/);
+  for (const id of ['octen-maui-events', 'octen-maui-volunteer']) {
+    const failed = without.status.find((s) => s.id === id);
+    assert.equal(failed?.state, 'needs_repair');
+    assert.match(failed.detail, /injected/);
+  }
   for (const fixture of ['maui-nonprofit-board', 'maui-news-events']) {
     assert.ok(without.status.some((s) => s.id === fixture && s.state === 'ok'), `fixture ${fixture} continued`);
   }
