@@ -7,7 +7,7 @@ import { LiveStrip, CauseScroller } from './Causes.jsx';
 import { World } from './World.jsx';
 import { AlohaCircle } from './AlohaCircle.jsx';
 import { KiiMatch, MatchCard } from './KiiMatch.jsx';
-import { HappeningOnMaui, LocalEventPlanner } from './Events.jsx';
+import { HappeningOnMaui, LocalEventPlanner, cleanTitle } from './Events.jsx';
 import { FEATURED_NONPROFITS } from './nonprofits.js';
 
 const TRUEFORGE_DEMO_ENABLED = import.meta.env.VITE_TRUEFORGE_DEMO === 'true';
@@ -363,7 +363,7 @@ export default function App() {
   // bring the visitor up to the matching widget where the promise is kept.
   const goWithLocal = (event) => {
     setView('home');
-    setMatchSeed({ id: event.id, title: event.title, causeTags: event.causeTags });
+    setMatchSeed({ id: event.id, title: cleanTitle(event.title, event.domain), causeTags: event.causeTags });
     requestAnimationFrame(() => {
       document.getElementById('meet-maui')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
