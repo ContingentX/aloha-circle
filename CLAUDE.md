@@ -31,6 +31,7 @@ Scraper configuration is version-controlled in `agentharness/src/sources.json` â
 - When adding/repairing a scraper, edit `sources.json` (never hardcode selectors in code) so settings stay reusable and version-controlled.
 - Bright Data credentials go in `agentharness/.env` as `BRIGHTDATA_API_TOKEN` (never committed).
 - CauseSignal shape: `{ source, url, title, causeTags[], urgency (1-5), summary, fetchedAt }`.
+- The site's **Happening on Maui** events plane has its own version-controlled Octen searches in `infra/donations/events-sources.json` (same spirit: edit queries there, never in code). A scheduled Lambda refresh publishes `EVENT#` records, `GET /api/events` serves them, and signed-in locals opt in via `POST /local/optin`. The key lives in SSM `/alohalive/prod/OCTEN_API_KEY`.
 
 ## Site media (/media)
 
