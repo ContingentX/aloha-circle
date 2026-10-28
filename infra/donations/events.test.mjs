@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   eventIdForUrl,
+  expandQuery,
   extractEventDates,
   sortPublicEvents,
   toEventRecord,
@@ -18,6 +19,80 @@ class ScanCommand { constructor(input) { this.input = input; } }
 class QueryCommand { constructor(input) { this.input = input; } }
 
 // ---- date extraction ----------------------------------------------------------
+
+test('extractEventDates reads a year even when the comma has no space after it', () => {
+  // Real Octen highlight shape: a 2025 fundraiser must not turn into a 2026 date.
+  assert.deepEqual(
+    extractEventDates('Tree of Hope Fundraiser Event Date: Nov 1,2025 – Dec 31,2025', NOW),
+    { startsAt: '2025-11-01' },
+  );
+  assert.deepEqual(extractEventDates('Planting 8 November,2025 upcountry', NOW), { startsAt: '2025-11-08' });
+});
+
+test('extractEventDates anchors yearless dates to the page publication date', () => {
+  // A May 2025 article about "May 31" is about May 31 2025, not a future May.
+  assert.deepEqual(
+    extractEventDates('Kicks off May 31 at Kaanapali', NOW, { publishedAt: '2025-05-30T00:00:00.000Z' }),
+    { startsAt: '2025-05-31' },
+  );
+  // A future or missing publication date falls back to now.
+  assert.deepEqual(
+    extractEventDates('Maui County Fair November 7', NOW, { publishedAt: '2030-01-01T00:00:00.000Z' }),
+    { startsAt: '2026-11-07' },
+  );
+});
+
+test('extractEventDates leaves far-off yearless dates undated', () => {
+  // October 28 now: "July 24" without a year is a stale page, not a date 9 months out.
+  assert.equal(extractEventDates('Featured events July 24 at the MACC', NOW), null);
+  // An explicit year far ahead is still trusted.
+  assert.deepEqual(extractEventDates('Concert April 29, 2027 at the MACC', NOW), { startsAt: '2027-04-29' });
+});
+
+test('expandQuery fills month tokens from the given (Hawaii) calendar', () => {
+  assert.equal(
+    expandQuery('Maui events {month} {next_month} {year}', new Date('2026-12-15T00:00:00.000Z')),
+    'Maui events December January 2026',
+  );
+  assert.equal(expandQuery('no tokens here', NOW), 'no tokens here');
+});
+
+test('toEventRecord drops passed and off-island pages and tidies highlights', () => {
+  const source = { sourceId: 's', causeTags: ['events'], urgency: 2 };
+  assert.equal(toEventRecord({
+    title: 'Maui Tree Planting', url: 'https://dlnr.test/plant',
+    highlight: 'This event has passed. Maui Tree Planting November 8,2025',
+  }, source, NOW), null);
+  assert.equal(toEventRecord({
+    title: "Movies, music and more: your guide to the weekend on Oʻahu", url: 'https://news.test/oahu',
+    highlight: 'Things to do.',
+  }, source, NOW), null);
+  assert.ok(toEventRecord({
+    title: 'Scholarships help Maui farmers attend a convention on Oʻahu', url: 'https://news.test/hfu',
+    highlight: 'Farmers.',
+  }, source, NOW));
+  const tidy = toEventRecord({
+    title: 'October on Maui', url: 'https://blog.test/october',
+    highlight: 'Reggae fans,clear your calendars.Three headliners land.Outrigger Resorts&Hotels at maui.surfrider.org',
+  }, source, NOW);
+  assert.equal(
+    tidy.summary,
+    'Reggae fans, clear your calendars. Three headliners land. Outrigger Resorts & Hotels at maui.surfrider.org',
+  );
+});
+
+test('sortPublicEvents keeps one card per headline', () => {
+  const base = {
+    summary: 's', source: 'x', causeTags: ['events'], urgency: 2,
+    fetchedAt: '2026-10-27T00:00:00.000Z', startsAt: null, endsAt: null,
+  };
+  const sorted = sortPublicEvents([
+    { ...base, id: 'evt-1', title: 'GUIDE: Maui night markets' },
+    { ...base, id: 'evt-2', title: 'Guide — Maui night markets!' },
+    { ...base, id: 'evt-3', title: 'Something else' },
+  ], NOW);
+  assert.deepEqual(sorted.map((event) => event.id), ['evt-1', 'evt-3']);
+});
 
 test('extractEventDates reads common forms and resolves missing years forward', () => {
   assert.deepEqual(extractEventDates('Maui County Fair November 7', NOW), { startsAt: '2026-11-07' });
@@ -131,7 +206,7 @@ const storedEvent = {
   startsAt: '2026-11-07', endsAt: '2026-11-09', status: 'live', verified: true,
 };
 
-function fakePlaneClient({ events = [storedEvent], optIns = [], puts = [], queries = [] } = {}) {
+function fakePlaneClient({ events = [storedEvent], optIns = [], locals = [], puts = [], queries = [] } = {}) {
   return {
     puts,
     async send(command) {
@@ -143,19 +218,28 @@ function fakePlaneClient({ events = [storedEvent], optIns = [], puts = [], queri
         queries.push(command.input);
         return { Items: optIns.filter((item) => item.PK === command.input.ExpressionAttributeValues[':pk']) };
       }
-      return { Items: [...events, ...optIns] };
+      return { Items: [...events, ...optIns, ...locals] };
     },
   };
 }
 
-test('list merges live events with local going counts; opt-outs do not count', async () => {
+test('list counts only verified locals as going; opt-outs and other accounts do not count', async () => {
   const optIns = [
     { PK: 'USER#a', SK: `OPTIN#${EVENT_ID}`, eventId: EVENT_ID, going: true, ownerKey: 'a'.repeat(64) },
     { PK: 'USER#b', SK: `OPTIN#${EVENT_ID}`, eventId: EVENT_ID, going: true, ownerKey: 'b'.repeat(64) },
     { PK: 'USER#c', SK: `OPTIN#${EVENT_ID}`, eventId: EVENT_ID, going: false, ownerKey: 'c'.repeat(64) },
+    // Signed in, opted in, but not a verified local (or not a local at all).
+    { PK: 'USER#d', SK: `OPTIN#${EVENT_ID}`, eventId: EVENT_ID, going: true, ownerKey: 'd'.repeat(64) },
+    { PK: 'USER#e', SK: `OPTIN#${EVENT_ID}`, eventId: EVENT_ID, going: true, ownerKey: 'e'.repeat(64) },
+  ];
+  const locals = [
+    { PK: 'LOCAL#la', SK: 'META', verified: true, status: 'verified', ownerKey: 'a'.repeat(64) },
+    { PK: 'LOCAL#lb', SK: 'META', verified: true, status: 'verified', ownerKey: 'b'.repeat(64) },
+    { PK: 'LOCAL#lc', SK: 'META', verified: true, status: 'verified', ownerKey: 'c'.repeat(64) },
+    { PK: 'LOCAL#ld', SK: 'META', verified: false, status: 'pending', ownerKey: 'd'.repeat(64) },
   ];
   const plane = createEventsPlane({
-    client: fakePlaneClient({ optIns }), table: 't',
+    client: fakePlaneClient({ optIns, locals }), table: 't',
     PutCommand, QueryCommand, ScanCommand,
     getOctenKey: async () => '', now: () => NOW,
   });
@@ -163,8 +247,9 @@ test('list merges live events with local going counts; opt-outs do not count', a
   assert.equal(events.length, 1);
   assert.equal(events[0].id, EVENT_ID);
   assert.equal(events[0].localsGoing, 2);
+  // The matcher gets every going opt-in and scores only the verified locals among them.
   const keys = await plane.optInKeys(EVENT_ID);
-  assert.deepEqual([...keys].sort(), ['a'.repeat(64), 'b'.repeat(64)]);
+  assert.deepEqual([...keys].sort(), ['a', 'b', 'd', 'e'].map((c) => c.repeat(64)));
 });
 
 test('setOptIn validates the event, snapshots it, and stamps the hashed identity', async () => {

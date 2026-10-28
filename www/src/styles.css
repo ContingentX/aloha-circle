@@ -269,7 +269,7 @@ footer .credit { margin-top: 4px; font-size: 0.72rem; opacity: 0.75; }
 .about-copy p { line-height: 1.6; margin: 0 0 14px; }
 
 /* ---- Happening on Maui (live events) --------------------------------- */
-.events-section { margin: 48px 0 8px; }
+.events-section { margin: 56px 0 8px; }
 .events-kicker {
   display: inline-flex; align-items: center; gap: 8px;
   margin: 0 0 6px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.14em;
@@ -282,26 +282,51 @@ footer .credit { margin-top: 4px; font-size: 0.72rem; opacity: 0.75; }
 @keyframes events-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 .events-headline {
   margin: 0 0 8px; color: var(--ocean-deep);
-  font-size: clamp(26px, 4vw, 38px); line-height: 1.12;
+  font-size: clamp(28px, 4.4vw, 40px); line-height: 1.08; letter-spacing: -0.01em;
 }
-.events-deck { max-width: 640px; margin: 0 0 20px; color: var(--ink); line-height: 1.55; }
+.events-deck { max-width: 600px; margin: 0 0 16px; color: var(--ink); font-size: 1.02rem; line-height: 1.55; }
+
+/* The promise, stated as a path: pick, get matched, go together. */
+.events-steps {
+  list-style: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  margin: 0 0 24px; padding: 0;
+}
+.events-steps li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(11, 93, 138, 0.12);
+  font-size: 0.84rem; font-weight: 600; line-height: 1.3; color: var(--ocean-deep);
+}
+.events-steps span {
+  flex: 0 0 auto; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--ocean-deep); color: white; font-size: 0.78rem; font-weight: 800;
+}
+.events-steps li:last-child span { background: var(--coral); }
 
 .event-card {
-  display: flex; gap: 16px; align-items: flex-start;
+  position: relative; display: flex; flex-direction: column; gap: 14px;
   background: white; border-radius: 16px; padding: 18px;
   box-shadow: 0 4px 14px rgba(7, 59, 87, 0.1);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .event-card:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(7, 59, 87, 0.16); }
+.event-card-main { display: flex; gap: 16px; align-items: flex-start; flex: 1 1 auto; }
 .event-featured {
-  border: 2px solid var(--coral); padding: 22px; margin-bottom: 18px;
+  border: 2px solid var(--coral); padding: 24px 22px 20px; margin-bottom: 14px;
   background: linear-gradient(135deg, #fffdf9 0%, #fef3ed 100%);
 }
-.event-featured .event-title { font-size: 1.35rem; }
-.events-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 14px;
+.event-flag {
+  position: absolute; top: -11px; left: 20px;
+  padding: 3px 10px; border-radius: 999px; background: var(--coral); color: white;
+  font-size: 0.68rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
 }
+.event-featured .event-title { font-size: 1.4rem; line-height: 1.22; }
+.event-featured .event-summary { -webkit-line-clamp: 4; }
+.event-featured .event-date { width: 66px; }
+.event-featured .event-date-day { font-size: 1.7rem; }
+.events-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+/* A lone last card spans the row instead of leaving a hole beside it. */
+.events-grid > .event-card:last-child:nth-child(odd) { grid-column: 1 / -1; }
 
 .event-date {
   flex: 0 0 auto; width: 58px; border-radius: 12px; overflow: hidden;
@@ -312,25 +337,65 @@ footer .credit { margin-top: 4px; font-size: 0.72rem; opacity: 0.75; }
   display: block; background: var(--coral); font-size: 0.62rem; font-weight: 800;
   letter-spacing: 0.1em; text-transform: uppercase; padding: 4px 0 3px;
 }
-.event-date-day { display: block; font-size: 1.45rem; font-weight: 800; padding: 3px 0 0; }
-.event-date-weekday { display: block; font-size: 0.6rem; opacity: 0.8; padding: 0 0 6px; }
-.event-date-open .event-date-day { font-size: 0.85rem; font-weight: 700; padding: 4px 0 10px; }
+.event-date-day { display: block; font-size: 1.45rem; font-weight: 800; line-height: 1.1; padding: 4px 0 0; }
+.event-date-weekday {
+  display: block; font-size: 0.6rem; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; opacity: 0.8; padding: 1px 0 6px;
+}
 
 .event-body { min-width: 0; }
-.event-meta { margin: 0 0 4px; font-size: 0.76rem; color: #5a7484; }
-.event-domain {
-  font-weight: 700; color: var(--ocean); text-transform: lowercase;
+.event-meta {
+  display: flex; flex-wrap: wrap; gap: 2px 10px; margin: 0 0 4px;
+  font-size: 0.74rem; color: #5a7484;
 }
-.event-going { color: var(--palm); font-weight: 600; }
-.event-title { margin: 0 0 6px; color: var(--ocean-deep); font-size: 1.05rem; line-height: 1.3; }
+.event-when { font-weight: 700; color: var(--ocean-deep); }
+.event-domain { color: #5a7484; text-transform: lowercase; }
+.event-title { margin: 0 0 6px; font-size: 1.05rem; line-height: 1.3; }
+.event-title a { color: var(--ocean-deep); text-decoration: none; }
+.event-title a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .event-summary {
-  margin: 0 0 6px; font-size: 0.9rem; line-height: 1.5; color: var(--ink);
+  margin: 0; font-size: 0.88rem; line-height: 1.5; color: #3c5566;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
-.event-actions { display: flex; align-items: center; gap: 14px; margin-top: 10px; flex-wrap: wrap; }
-.event-cta { padding: 9px 18px; font-size: 0.9rem; }
-.event-link { color: var(--ocean); font-size: 0.86rem; font-weight: 600; }
-.events-footnote { margin: 16px 0 0; font-size: 0.74rem; color: #5a7484; }
+.event-actions {
+  display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap;
+  padding-top: 12px; border-top: 1px solid #edf3f6;
+}
+.event-cta { margin-top: 0; padding: 9px 18px; font-size: 0.9rem; font-weight: 600; }
+.event-going { white-space: nowrap; font-size: 0.82rem; font-weight: 700; color: var(--palm); }
+.event-going-open { font-weight: 500; color: #5a7484; }
+
+/* Open-ended finds (volunteer days, standing markets) read as a compact list. */
+.anytime {
+  margin-top: 22px; padding: 18px 20px 8px; border-radius: 16px;
+  background: rgba(255, 255, 255, 0.82); border: 1px solid rgba(11, 93, 138, 0.12);
+}
+.anytime-heading {
+  margin: 0 0 4px; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--ocean);
+}
+.anytime-list { list-style: none; margin: 0; padding: 0; }
+.anytime-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 12px 0; border-bottom: 1px solid #e3edf2;
+}
+.anytime-row:last-child { border-bottom: none; }
+.anytime-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.anytime-title { color: var(--ocean-deep); font-weight: 600; line-height: 1.35; text-decoration: none; }
+.anytime-title:hover { text-decoration: underline; text-underline-offset: 3px; }
+.anytime-meta { font-size: 0.76rem; color: #5a7484; }
+.anytime-cta {
+  flex: 0 0 auto; border: 1px solid var(--coral); background: white; color: var(--coral);
+  border-radius: 999px; padding: 7px 14px; font-size: 0.84rem; font-weight: 700; cursor: pointer;
+  white-space: nowrap; transition: background 0.12s ease, color 0.12s ease;
+}
+.anytime-cta:hover { background: var(--coral); color: white; }
+.events-footnote { margin: 16px 0 0; font-size: 0.74rem; line-height: 1.5; color: #5a7484; }
+
+@media (prefers-reduced-motion: reduce) {
+  .events-kicker::before { animation: none; }
+  .event-card, .event-card:hover { transition: none; transform: none; }
+}
 
 .event-seed {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
@@ -348,14 +413,22 @@ footer .credit { margin-top: 4px; font-size: 0.72rem; opacity: 0.75; }
 .optin-row:last-child { border-bottom: none; }
 .optin-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .optin-info strong { color: var(--ocean-deep); font-size: 0.95rem; }
+.optin-row-on .optin-info strong { color: var(--palm); }
 .optin-toggle {
-  flex: 0 0 auto; border-radius: 999px; border: 1px solid var(--palm);
-  background: white; color: var(--palm); padding: 7px 16px; cursor: pointer;
-  font-size: 0.86rem; font-weight: 600; transition: background 0.12s ease;
+  flex: 0 0 auto; min-width: 128px; border-radius: 999px; border: 1.5px dashed var(--palm);
+  background: white; color: var(--palm); padding: 8px 16px; cursor: pointer;
+  font-size: 0.86rem; font-weight: 700; transition: background 0.12s ease, color 0.12s ease;
 }
-.optin-toggle:hover { background: #eefaf4; }
-.optin-on { background: var(--palm); color: white; }
-.optin-on:hover { background: var(--palm); }
+.optin-toggle:hover { background: #eefaf4; border-style: solid; }
+.optin-on { background: var(--palm); border-style: solid; color: white; }
+.optin-on:hover { background: #17694a; }
+.planner-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.planner-head h3 { margin-bottom: 4px; }
+.planner-count {
+  padding: 3px 10px; border-radius: 999px; background: #dff3e8; color: var(--palm);
+  font-size: 0.8rem; font-weight: 700;
+}
+.planner-signin { border: 1.5px dashed rgba(28, 124, 84, 0.45); box-shadow: none; }
 .optin-toggle:disabled { opacity: 0.5; cursor: default; }
 
 .calendar-title { margin: 18px 0 8px; color: var(--ocean-deep); }
@@ -389,8 +462,13 @@ footer .credit { margin-top: 4px; font-size: 0.72rem; opacity: 0.75; }
 .calendar-day-list a { color: var(--ocean); }
 
 @media (max-width: 640px) {
-  .event-card { gap: 12px; padding: 14px; }
-  .event-featured { padding: 16px; }
+  .event-card { padding: 16px; }
+  .event-card-main { gap: 12px; }
+  .event-featured { padding: 22px 16px 16px; }
+  .event-featured .event-title { font-size: 1.2rem; }
   .events-grid { grid-template-columns: 1fr; }
+  .events-steps { grid-template-columns: 1fr; gap: 6px; }
+  .anytime { padding: 14px 14px 4px; }
+  .anytime-row { flex-direction: column; align-items: flex-start; gap: 8px; }
   .optin-row { flex-direction: column; align-items: flex-start; }
 }

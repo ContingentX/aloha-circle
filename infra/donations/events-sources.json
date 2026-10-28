@@ -1,13 +1,24 @@
 {
-  "note": "Version-controlled Octen search settings for the site's Happening on Maui events plane (see CLAUDE.md: edit settings here, never hardcode queries in code). Each entry mirrors the agentharness sources.json octen contract; the scheduled Lambda refresh publishes results as EVENT# records.",
+  "note": "Version-controlled Octen search settings for the site's Happening on Maui events plane (see CLAUDE.md: edit settings here, never hardcode queries in code). Each entry mirrors the agentharness sources.json octen contract; the scheduled Lambda refresh publishes results as EVENT# records. Queries may use {month}, {next_month} and {year}; the refresh fills them from the Hawaii calendar so searches ask for what is coming up.",
   "sources": [
     {
       "id": "octen-maui-happenings",
       "name": "Maui events & festivals this month (live via Octen search)",
       "enabled": true,
       "octen": {
-        "query": "Maui events this month festival concert farmers market cultural celebration dates",
+        "query": "Maui events {next_month} {year} festival concert",
         "count": 12,
+        "causeTags": ["events", "community", "culture"],
+        "urgency": 2
+      }
+    },
+    {
+      "id": "octen-maui-this-month",
+      "name": "Maui events still to come this month (live via Octen search)",
+      "enabled": true,
+      "octen": {
+        "query": "Maui events {month} {year} festival concert",
+        "count": 10,
         "causeTags": ["events", "community", "culture"],
         "urgency": 2
       }
@@ -17,7 +28,7 @@
       "name": "Maui outdoor & ocean gatherings (live via Octen search)",
       "enabled": true,
       "octen": {
-        "query": "Maui beach cleanup reef snorkel hike group event upcoming dates",
+        "query": "Maui beach cleanup reef hike group event {next_month} {year}",
         "count": 8,
         "causeTags": ["ocean", "reef", "hiking", "community"],
         "urgency": 3
@@ -28,7 +39,7 @@
       "name": "Maui volunteer days & community workdays (live via Octen search)",
       "enabled": true,
       "octen": {
-        "query": "Maui volunteer day community workday tree planting food bank upcoming date",
+        "query": "Maui community volunteer workday {next_month} {year}",
         "count": 8,
         "causeTags": ["volunteer", "community", "farming"],
         "urgency": 3

@@ -33,51 +33,109 @@ const formatRange = (startsAt, endsAt) => {
     : `${MONTH_SHORT[start.getUTCMonth()]} ${start.getUTCDate()} – ${MONTH_SHORT[end.getUTCMonth()]} ${end.getUTCDate()}`;
 };
 
-function DateBadge({ startsAt }) {
-  const date = parseDay(startsAt);
-  if (!date) {
-    return (
-      <div className="event-date event-date-open" aria-label="No fixed date">
-        <span className="event-date-month">Island</span>
-        <span className="event-date-day">time</span>
-      </div>
-    );
+// Search-result headlines carry their publisher ("… : Maui Now",
+// "… | Fairmont Kea Lani"). The source domain already shows on the card, so a
+// trailing segment that names the site is dropped from the headline.
+const siteKey = (text) => text.toLowerCase().replace(/[^a-z0-9]/g, '');
+export const cleanTitle = (title, domain = '') => {
+  const site = siteKey(domain);
+  let clean = title;
+  for (let pass = 0; pass < 2; pass += 1) {
+    const match = /^(.{12,}?)\s+[|:–—-]\s+([^|:–—]{3,48})$/.exec(clean);
+    const key = match ? siteKey(match[2]) : '';
+    if (!match || key.length < 4 || !site.includes(key)) break;
+    clean = match[1];
   }
+  return clean;
+};
+
+const domainOf = (url) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+};
+
+const hawaiiToday = () => new Date(Date.now() - 10 * 3600e3).toISOString().slice(0, 10);
+
+function DateBadge({ startsAt, endsAt }) {
+  // A range already under way reads "thru <last day>", not a start date that
+  // has passed.
+  const ongoing = endsAt && startsAt < hawaiiToday() && endsAt >= hawaiiToday();
+  const date = parseDay(ongoing ? endsAt : startsAt);
   return (
-    <div className="event-date">
-      <span className="event-date-month">{MONTH_SHORT[date.getUTCMonth()]}</span>
+    <div className="event-date" aria-hidden="true">
+      <span className="event-date-month">{ongoing ? 'Thru' : MONTH_SHORT[date.getUTCMonth()]}</span>
       <span className="event-date-day">{date.getUTCDate()}</span>
-      <span className="event-date-weekday">{WEEKDAY_SHORT[date.getUTCDay()]}</span>
+      <span className="event-date-weekday">
+        {ongoing ? MONTH_SHORT[date.getUTCMonth()] : WEEKDAY_SHORT[date.getUTCDay()]}
+      </span>
     </div>
   );
 }
 
+function GoingNote({ count }) {
+  return count > 0 ? (
+    <span className="event-going">🤙 {count} local{count === 1 ? '' : 's'} going</span>
+  ) : (
+    <span className="event-going event-going-open">We'll find you a local</span>
+  );
+}
+
 function EventCard({ event, featured, onGoWithLocal }) {
+  const title = cleanTitle(event.title, event.domain);
   const when = formatRange(event.startsAt, event.endsAt);
   return (
     <article className={featured ? 'event-card event-featured' : 'event-card'}>
-      <DateBadge startsAt={event.startsAt} />
-      <div className="event-body">
-        <p className="event-meta">
-          <span className="event-domain">{event.domain}</span>
-          {when && <span className="event-when"> · {when}</span>}
-          {event.localsGoing > 0 && (
-            <span className="event-going"> · 🤙 {event.localsGoing} local{event.localsGoing === 1 ? '' : 's'} ready to go</span>
-          )}
-        </p>
-        <h3 className="event-title">{event.title}</h3>
-        <p className="event-summary">{event.summary}</p>
-        <p className="tags">{event.causeTags.map((tag) => `#${tag}`).join(' ')}</p>
-        <div className="event-actions">
-          <button className="cta event-cta" onClick={() => onGoWithLocal(event)}>
-            Go with a local
-          </button>
-          <a className="event-link" href={event.url} target="_blank" rel="noopener noreferrer">
-            Event details ↗
-          </a>
+      {featured && <span className="event-flag">Coming up next</span>}
+      <div className="event-card-main">
+        <DateBadge startsAt={event.startsAt} endsAt={event.endsAt} />
+        <div className="event-body">
+          <p className="event-meta">
+            <span className="event-when">{when}</span>
+            <span className="event-domain">{event.domain}</span>
+          </p>
+          <h3 className="event-title">
+            <a href={event.url} target="_blank" rel="noopener noreferrer">{title}</a>
+          </h3>
+          <p className="event-summary">{event.summary}</p>
         </div>
       </div>
+      <div className="event-actions">
+        <button
+          className="cta event-cta"
+          onClick={() => onGoWithLocal(event)}
+          aria-label={`Go with a local: ${title}`}
+        >
+          Go with a local
+        </button>
+        <GoingNote count={event.localsGoing} />
+      </div>
     </article>
+  );
+}
+
+function AnytimeRow({ event, onGoWithLocal }) {
+  const title = cleanTitle(event.title, event.domain);
+  return (
+    <li className="anytime-row">
+      <div className="anytime-info">
+        <a className="anytime-title" href={event.url} target="_blank" rel="noopener noreferrer">{title}</a>
+        <span className="anytime-meta">
+          {event.domain}
+          {event.localsGoing > 0 && <> · <span className="event-going">🤙 {event.localsGoing} going</span></>}
+        </span>
+      </div>
+      <button
+        type="button"
+        className="anytime-cta"
+        onClick={() => onGoWithLocal(event)}
+        aria-label={`Go with a local: ${title}`}
+      >
+        Go with a local →
+      </button>
+    </li>
   );
 }
 
@@ -94,29 +152,50 @@ export function HappeningOnMaui({ onGoWithLocal }) {
   // showing an empty news section.
   if (!events || events.length === 0) return null;
 
-  const [lead, ...rest] = events;
+  // Dated finds become calendar cards; open-ended ones (volunteer days,
+  // standing markets) read better as a compact list than as dateless cards.
+  const dated = events.filter((event) => event.startsAt).slice(0, 5);
+  const anytime = events.filter((event) => !event.startsAt).slice(0, 6);
+  const [lead, ...rest] = dated;
 
   return (
-    <section className="events-section" id="happening">
-      <p className="events-kicker">Live from the open web</p>
-      <h2 className="events-headline">Happening on Maui</h2>
+    <section className="events-section" id="happening" aria-labelledby="happening-title">
+      <p className="events-kicker">Live from Maui's calendars</p>
+      <h2 className="events-headline" id="happening-title">Happening on Maui</h2>
       <p className="events-deck">
-        Real events and gatherings, found across the island's calendars and
-        refreshed through the day. Pick one that calls to you — Aloha Circle
-        introduces you to a <strong>verified local</strong> who will experience
-        it with you, not just point the way.
+        Don't go alone, and don't go as a tourist. Pick something below and
+        Aloha Circle introduces you to a verified local who'd love to go with you.
       </p>
-      <EventCard event={lead} featured onGoWithLocal={onGoWithLocal} />
+      <ol className="events-steps">
+        <li><span>1</span>Pick what calls to you</li>
+        <li><span>2</span>We match you with a local who's going</li>
+        <li><span>3</span>Experience it together</li>
+      </ol>
+
+      {lead && <EventCard event={lead} featured onGoWithLocal={onGoWithLocal} />}
       {rest.length > 0 && (
         <div className="events-grid">
-          {rest.slice(0, 8).map((event) => (
+          {rest.map((event) => (
             <EventCard key={event.id} event={event} onGoWithLocal={onGoWithLocal} />
           ))}
         </div>
       )}
+
+      {anytime.length > 0 && (
+        <div className="anytime">
+          <h3 className="anytime-heading">{dated.length > 0 ? 'Any day on Maui' : 'Ways in, any day'}</h3>
+          <ul className="anytime-list">
+            {anytime.map((event) => (
+              <AnytimeRow key={event.id} event={event} onGoWithLocal={onGoWithLocal} />
+            ))}
+          </ul>
+        </div>
+      )}
+
       <p className="events-footnote">
-        Found by live web search · dates are read from the source page, so
-        confirm with the organizer · locals choose which events they share.
+        Found by live web search and refreshed through the day. Dates come from
+        the source page, so confirm with the organizer. Locals choose which
+        events they share.
       </p>
     </section>
   );
@@ -207,7 +286,9 @@ export function OptInCalendar({ plans }) {
         <ul className="calendar-day-list">
           {selectedPlans.map((plan) => (
             <li key={plan.eventId}>
-              {plan.url ? <a href={plan.url} target="_blank" rel="noopener noreferrer">{plan.title}</a> : plan.title}
+              {plan.url
+                ? <a href={plan.url} target="_blank" rel="noopener noreferrer">{cleanTitle(plan.title, domainOf(plan.url))}</a>
+                : plan.title}
             </li>
           ))}
         </ul>
@@ -217,7 +298,7 @@ export function OptInCalendar({ plans }) {
 }
 
 export function LocalEventPlanner() {
-  const { user, ready } = useAuth();
+  const { user, ready, signInWithGoogle } = useAuth();
   const [events, setEvents] = useState([]);
   const [optIns, setOptIns] = useState(null);
   const [busyId, setBusyId] = useState(null);
@@ -233,7 +314,22 @@ export function LocalEventPlanner() {
       .catch((e) => { setOptIns([]); setError(e.message); });
   }, [user]);
 
-  if (!ready || !user || optIns === null) return null;
+  if (!ready) return null;
+  if (!user) {
+    return (
+      <div className="card planner-signin">
+        <h3>Take a visitor to something you love</h3>
+        <p className="hint">
+          Sign in to choose the island events you'd share. Visitors who pick one
+          get matched to you, and your aloha calendar keeps track.
+        </p>
+        <button type="button" className="google-btn" onClick={() => signInWithGoogle().catch(() => {})}>
+          Sign in with Google
+        </button>
+      </div>
+    );
+  }
+  if (optIns === null) return null;
 
   const going = new Map(optIns.filter((optIn) => optIn.going).map((optIn) => [optIn.eventId, optIn]));
 
@@ -263,11 +359,14 @@ export function LocalEventPlanner() {
 
   return (
     <div className="card">
-      <h3>Events you'd share with a visitor</h3>
+      <div className="planner-head">
+        <h3>Events you'd share with a visitor</h3>
+        {plans.length > 0 && <span className="planner-count">🤙 {plans.length} going</span>}
+      </div>
       <p className="hint">
-        Opt in to what's happening and visitors who pick that event get matched
-        to you. Your calendar below shows everything you've agreed to attend if
-        a visitor matches with you.
+        Say you're in and visitors who pick that event get matched to you. Your
+        calendar below holds everything you've agreed to attend if a visitor
+        matches with you.
       </p>
       {events.length === 0 && <p className="hint">No live events found right now — check back soon.</p>}
       <ul className="optin-list">
@@ -275,11 +374,11 @@ export function LocalEventPlanner() {
           const isGoing = going.has(event.id);
           const when = formatRange(event.startsAt, event.endsAt);
           return (
-            <li key={event.id} className="optin-row">
+            <li key={event.id} className={isGoing ? 'optin-row optin-row-on' : 'optin-row'}>
               <div className="optin-info">
-                <strong>{event.title}</strong>
+                <strong>{cleanTitle(event.title, event.domain)}</strong>
                 <span className="hint">
-                  {when ?? 'island time'} · {event.domain}
+                  {when ?? 'Any day'} · {event.domain}
                   {event.localsGoing > 0 && ` · ${event.localsGoing} going`}
                 </span>
               </div>
@@ -287,9 +386,10 @@ export function LocalEventPlanner() {
                 type="button"
                 className={isGoing ? 'optin-toggle optin-on' : 'optin-toggle'}
                 disabled={busyId === event.id}
+                aria-pressed={isGoing}
                 onClick={() => toggle(event)}
               >
-                {isGoing ? "🤙 I'm in" : "I'd go"}
+                {isGoing ? "✓ I'm in" : '+ Count me in'}
               </button>
             </li>
           );
@@ -302,7 +402,7 @@ export function LocalEventPlanner() {
           <OptInCalendar plans={dated} />
           {undated.length > 0 && (
             <p className="hint">
-              Island time (no set date): {undated.map((plan) => plan.title).join(' · ')}
+              Any day (no set date): {undated.map((plan) => cleanTitle(plan.title, domainOf(plan.url))).join(' · ')}
             </p>
           )}
         </>
