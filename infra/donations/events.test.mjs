@@ -181,6 +181,36 @@ test('isAggregatorPage flags calendars, guides and listing pages, not single eve
   assert.ok(!isAggregatorPage('Volunteer with the watershed crew', 'https://kealani.test/volunteer'));
 });
 
+test('isAggregatorPage flags volunteer roundups and civic news alerts (live leaks, 2026-10-27)', () => {
+  // Magazine directory: generic whole-title roundup with no organisation name.
+  assert.ok(isAggregatorPage('Volunteer Opportunities on Maui', 'https://www.mauimagazine.net/volunteering-maui/'));
+  assert.ok(isAggregatorPage('Volunteering on Maui', 'https://mag.test/give-back'));
+  assert.ok(isAggregatorPage('Where to volunteer this holiday season', 'https://mag.test/article'));
+  // A summary that lists "Org – description" three times is a directory even
+  // when the title gives nothing away.
+  assert.ok(isAggregatorPage('Giving back in Upcountry', 'https://mag.test/upcountry',
+    'Malama Maui Nui – This non-profit aims to protect Maui’s ecosystem. Get involved. ' +
+    'Maui Forest Bird Recovery Project – MFBRP’s mission is to preserve native species. ' +
+    'Maui Nui Botanical Gardens – Participate in native plant cultivation.'));
+  // Government civic alerts / news flashes: undatable news-cycle posts that
+  // bundle several meetings and outlive their year.
+  assert.ok(isAggregatorPage(
+    'County invites resident feedback to help shape community forest plan for Maui island • Maui County',
+    'https://mauicounty.gov/CivicAlerts.aspx?AID=17948',
+  ));
+  assert.ok(isAggregatorPage('County seeks feedback', 'https://www.mauicounty.gov/m/newsflash/home/detail/17948'));
+  // A single org's own volunteer page keeps its branded title and stays.
+  assert.ok(!isAggregatorPage(
+    'Maui Volunteer Opportunities | Give Back | Fairmont Kea Lani',
+    'https://www.fairmont-kea-lani.com/culture/voluntourism/',
+    'Through hands-on learning with local experts, participants discover the importance of ' +
+    'restoring and preserving Hawaiʻi’s natural resources while embracing the spirit of mālama ʻāina.',
+  ));
+  // One en-dash aside in prose is ordinary writing, not a directory.
+  assert.ok(!isAggregatorPage('Harvest festival', 'https://farm.test/harvest',
+    'A family day — music, food and games — at the farm. Gates open at 10 a.m. Keiki crafts – Free.'));
+});
+
 test('toEventRecord and toPublicEvent drop aggregator pages, retroactively too', () => {
   const source = { sourceId: 's', causeTags: ['events'], urgency: 2 };
   assert.equal(toEventRecord({

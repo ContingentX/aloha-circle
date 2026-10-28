@@ -293,6 +293,12 @@ const AGGREGATOR_TITLE_RES = [
   /\bevents\b[^|]*\b20\d{2}\b/i, // "Maui Events November 2026"
   /\bfestivals? (?:&|and) events\b/i,
   /\bannual events\b/i,
+  // A title that is ONLY a generic volunteering/giving-back roundup with no
+  // organisation name ("Volunteer Opportunities on Maui") is a magazine
+  // directory. Anchored to the whole title so a single org's own volunteer
+  // page ("Maui Volunteer Opportunities | Fairmont Kea Lani") survives.
+  /^\s*(?:maui\s+)?(?:volunteer(?:ing)?|giving back|ways to (?:help|volunteer|give back))(?:\s+opportunities)?(?:\s+(?:on|in|around)\s+maui)?\s*$/i,
+  /\bwhere to volunteer\b/i,
 ];
 // Listing pages live at bare section paths; a digit-bearing event-id query
 // param ("calendar.aspx?EID=123") marks a specific event page instead.
@@ -300,6 +306,12 @@ const AGGREGATOR_PATH_RE =
   /(?:^|\/)(?:events?|event-?calendar|events-?calendar|calendar(?:\.aspx)?|things-to-do|activities|whats-happening|annual-events)\/?$/i;
 // A news-site category/tag archive is a listing page wherever its path ends.
 const ARCHIVE_PATH_RE = /(?:^|\/)(?:category|categories|tag|tags|topics?)\//i;
+// Government "news flash" / civic-alert posts (CivicAlerts.aspx?AID=…,
+// /newsflash/…) are news-cycle announcements that often bundle several
+// meetings, carry no machine-readable publication date, and stay online for
+// years — a yearless "Nov. 8" inside one can belong to any year, so the card
+// cannot honestly promise anything attendable.
+const NEWS_ALERT_PATH_RE = /(?:^|\/)(?:civicalerts\.aspx|newsflash)(?:\/|$)/i;
 const EVENT_ID_QUERY_RE = /(?:^|[?&])(?:eid|event_?id|id)=\w*\d/i;
 // Podcast episodes and streams rank for "Maui events" searches but nobody can
 // attend a URL; same treatment as listing pages.
@@ -308,12 +320,20 @@ const NON_ATTENDABLE_DOMAINS = new Set([
   'podcasts.google.com', 'audible.com', 'youtube.com', 'youtu.be',
 ]);
 
-export function isAggregatorPage(title, url) {
+// A summary that reads "Org Name – description. Org Name – description. …"
+// is a directory of organisations, not one event. En/em dash only: hyphens
+// occur in ordinary prose ("four-concert") and date ranges, and a single
+// dash aside is normal writing — three entries is decisive.
+const DIRECTORY_ENTRY_RE = /[a-zʻ’)à-ſ]\s+[–—]\s*[A-Z]/g;
+
+export function isAggregatorPage(title, url, summary = '') {
   if (AGGREGATOR_TITLE_RES.some((re) => re.test(title))) return true;
+  if ((cleanText(summary).match(DIRECTORY_ENTRY_RE) ?? []).length >= 3) return true;
   try {
     const parsed = new URL(url);
     if (NON_ATTENDABLE_DOMAINS.has(parsed.hostname.replace(/^www\./, ''))) return true;
     if (ARCHIVE_PATH_RE.test(parsed.pathname)) return true;
+    if (NEWS_ALERT_PATH_RE.test(parsed.pathname)) return true;
     return AGGREGATOR_PATH_RE.test(parsed.pathname) && !EVENT_ID_QUERY_RE.test(parsed.search);
   } catch {
     return false;
@@ -346,7 +366,7 @@ export function toEventRecord(result, { sourceId, causeTags, urgency }, now = ne
   const summary = readable.length > EVENT_SUMMARY_MAX
     ? `${readable.slice(0, EVENT_SUMMARY_MAX - 1)}…`
     : readable;
-  if (PASSED_RE.test(summaryRaw) || isOffIsland(title) || isAggregatorPage(title, url)) return null;
+  if (PASSED_RE.test(summaryRaw) || isOffIsland(title) || isAggregatorPage(title, url, summaryRaw)) return null;
   const fetchedAt = isoTimestamp(result?.time_last_crawled) ||
     isoTimestamp(result?.time_published) || now.toISOString();
   // A full date in the article URL stands in for a missing publication date,
@@ -388,7 +408,7 @@ export function toPublicEvent(record) {
     record?.status !== 'live' || record?.verified !== true ||
     // Retroactive: aggregator records published before this filter existed
     // disappear from the listing without waiting for their TTL.
-    isAggregatorPage(title, url)
+    isAggregatorPage(title, url, summary)
   ) return null;
   const day = (value) => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null);
   return {
