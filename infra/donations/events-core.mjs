@@ -96,6 +96,58 @@ const resolveYearless = (month, day, reference) => {
 // event, so it stays undated rather than earning a date badge.
 const YEARLESS_MAX_AHEAD_DAYS = 200;
 
+const WEEKDAYS = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+const WEEKDAY_RE = /\b(?:this\s+|next\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i;
+// "every Saturday" / "Saturdays" is a recurring gathering, not a one-off
+// anchored to the article's news cycle.
+const RECURRING_RE = /\bevery\b|\b(?:sun|mon|tues|wednes|thurs|fri|satur)days\b/i;
+
+const startOfUtcDay = (date) => new Date(Math.floor(date.getTime() / DAY_MS) * DAY_MS);
+
+// News blurbs date events by weekday ("rescheduled for Saturday"), which only
+// means something relative to the day the page was published. With a trusted
+// publication date the weekday resolves deterministically; without one it
+// stays unresolved — anchoring to crawl time would invent future dates for
+// old articles.
+function resolveRelativeDay(haystack, published) {
+  if (!published || RECURRING_RE.test(haystack)) return null;
+  const ref = startOfUtcDay(published);
+  if (/\btoday\b|\btonight\b/i.test(haystack)) return { start: ref, end: null };
+  if (/\btomorrow\b/i.test(haystack)) return { start: new Date(ref.getTime() + DAY_MS), end: null };
+  if (/\bthis weekend\b/i.test(haystack)) {
+    const saturday = new Date(ref.getTime() + ((6 - ref.getUTCDay() + 7) % 7) * DAY_MS);
+    return { start: saturday, end: new Date(saturday.getTime() + DAY_MS) };
+  }
+  const match = WEEKDAY_RE.exec(haystack);
+  if (!match) return null;
+  let ahead = (WEEKDAYS[match[1].toLowerCase()] - ref.getUTCDay() + 7) % 7;
+  if (ahead === 0 && /^next\s/i.test(match[0])) ahead = 7;
+  return { start: new Date(ref.getTime() + ahead * DAY_MS), end: null };
+}
+
+// Date embedded in a news-article URL path ("/2026/10/09/" or "/2026/10/").
+// Returns { startsMs, lastMs } for the day (or the whole month) or null.
+export function articleDateFromUrl(url) {
+  let pathname;
+  try {
+    pathname = new URL(url).pathname;
+  } catch {
+    return null;
+  }
+  const match = /\/(20\d{2})\/(\d{1,2})(?:\/(\d{1,2}))?(?:\/|$)/.exec(pathname);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  if (month < 0 || month > 11) return null;
+  if (match[3]) {
+    const day = utcDate(year, month, Number(match[3]));
+    return day ? { startMs: day.getTime(), lastMs: day.getTime() } : null;
+  }
+  const first = utcDate(year, month, 1);
+  const last = new Date(Date.UTC(year, month + 1, 0));
+  return first ? { startMs: first.getTime(), lastMs: last.getTime() } : null;
+}
+
 /**
  * Extract the first recognisable event date (or range) from free text.
  * `publishedAt` (the page's own date, when known and not in the future)
@@ -173,7 +225,14 @@ export function extractEventDates(text, now = new Date(), { publishedAt = null }
     if (!built?.start) continue;
     if (!best || match.index < best.index) best = { index: match.index, ...built };
   }
-  if (!best) return null;
+  if (!best) {
+    const relative = resolveRelativeDay(
+      haystack,
+      published && !Number.isNaN(published.getTime()) && published.getTime() <= now.getTime() ? published : null,
+    );
+    if (!relative) return null;
+    best = relative;
+  }
   const result = { startsAt: isoDay(best.start) };
   if (best.end && best.end.getTime() >= best.start.getTime()) result.endsAt = isoDay(best.end);
   return result;
@@ -218,6 +277,39 @@ const PASSED_RE = /\b(?:this )?event has (?:passed|ended)\b/i;
 const OFF_ISLAND_RE = /\b(?:o[ʻ'‘]?ahu|waik[iī]k[iī]|honolulu|kaua[ʻ'‘]?i|big island|hilo|kona)\b/i;
 const isOffIsland = (title) => OFF_ISLAND_RE.test(title) && !/\bmaui\b/i.test(title);
 
+// Search queries like "Maui events November 2026" rank calendars, month
+// guides, and listing directories highly — pages ABOUT events, not events.
+// They make bad cards (nothing to attend together), so they are dropped at
+// ingest and filtered out of already-stored records at serve time.
+const AGGREGATOR_TITLE_RES = [
+  /\b(?:events?|community|activity|activities) calendar\b/i,
+  /\bcalendar of events\b/i,
+  /\bthings to do\b/i,
+  /\bevents? (?:guide|listings?|roundup|directory)\b/i,
+  /\b(?:your |a )?guide to\b/i,
+  /\bwhat(?:'|’)?s (?:happening|going on|on)\b/i,
+  /\bupcoming events\b/i,
+  /\b(?:top|best) \d+\b/i,
+  /\bevents\b[^|]*\b20\d{2}\b/i, // "Maui Events November 2026"
+  /\bfestivals? (?:&|and) events\b/i,
+  /\bannual events\b/i,
+];
+// Listing pages live at bare section paths; a digit-bearing event-id query
+// param ("calendar.aspx?EID=123") marks a specific event page instead.
+const AGGREGATOR_PATH_RE =
+  /(?:^|\/)(?:events?|event-?calendar|events-?calendar|calendar(?:\.aspx)?|things-to-do|activities|whats-happening|annual-events)\/?$/i;
+const EVENT_ID_QUERY_RE = /(?:^|[?&])(?:eid|event_?id|id)=\w*\d/i;
+
+export function isAggregatorPage(title, url) {
+  if (AGGREGATOR_TITLE_RES.some((re) => re.test(title))) return true;
+  try {
+    const parsed = new URL(url);
+    return AGGREGATOR_PATH_RE.test(parsed.pathname) && !EVENT_ID_QUERY_RE.test(parsed.search);
+  } catch {
+    return false;
+  }
+}
+
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
@@ -244,12 +336,15 @@ export function toEventRecord(result, { sourceId, causeTags, urgency }, now = ne
   const summary = readable.length > EVENT_SUMMARY_MAX
     ? `${readable.slice(0, EVENT_SUMMARY_MAX - 1)}…`
     : readable;
-  if (PASSED_RE.test(summaryRaw) || isOffIsland(title)) return null;
+  if (PASSED_RE.test(summaryRaw) || isOffIsland(title) || isAggregatorPage(title, url)) return null;
   const fetchedAt = isoTimestamp(result?.time_last_crawled) ||
     isoTimestamp(result?.time_published) || now.toISOString();
-  const dates = extractEventDates(`${title} ${summaryRaw}`, now, {
-    publishedAt: isoTimestamp(result?.time_published) || null,
-  });
+  // A full date in the article URL stands in for a missing publication date,
+  // so "rescheduled for Saturday" still resolves against the article's day.
+  const urlDate = articleDateFromUrl(url);
+  const publishedAt = isoTimestamp(result?.time_published) ||
+    (urlDate && urlDate.startMs === urlDate.lastMs ? new Date(urlDate.startMs).toISOString() : null);
+  const dates = extractEventDates(`${title} ${summaryRaw}`, now, { publishedAt });
   return {
     entityKind: 'event',
     title,
@@ -280,7 +375,10 @@ export function toPublicEvent(record) {
   if (
     !id || !title || !summary || !url || !source || !fetchedAt ||
     causeTags.length === 0 ||
-    record?.status !== 'live' || record?.verified !== true
+    record?.status !== 'live' || record?.verified !== true ||
+    // Retroactive: aggregator records published before this filter existed
+    // disappear from the listing without waiting for their TTL.
+    isAggregatorPage(title, url)
   ) return null;
   const day = (value) => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null);
   return {
@@ -304,23 +402,57 @@ export function toPublicEvent(record) {
  * than one day gone are dropped. `now` should already be Hawaii-shifted —
  * the island decides when "today" ends.
  */
+// An undated record whose URL dates the article more than this many days back
+// is almost certainly coverage of something that already happened.
+const STALE_ARTICLE_GRACE_DAYS = 14;
+
+const titleTokens = (title) => title
+  .split('|')[0]
+  .normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .replace(/[ʻ'’‘]/g, '')
+  .toLowerCase()
+  .replace(/\b\d+(?:st|nd|rd|th)\b/g, ' ')
+  .replace(/\bannual\b/g, ' ')
+  .replace(/[^a-z0-9]+/g, ' ')
+  .split(' ')
+  .filter(Boolean);
+
 export function sortPublicEvents(events, now = new Date()) {
   const today = isoDay(new Date(now.getTime() - DAY_MS));
+  const staleBeforeMs = now.getTime() - STALE_ARTICLE_GRACE_DAYS * DAY_MS;
   const keep = events.filter((event) => {
     const lastDay = event.endsAt ?? event.startsAt;
-    return !lastDay || lastDay >= today;
+    if (lastDay) return lastDay >= today;
+    // Undated cards sit in "Any day on Maui", which promises the reader they
+    // can still go. A title anchored to a news cycle ("rescheduled for
+    // Saturday") or a stale dated article URL breaks that promise: the date
+    // existed, the parser just couldn't read it — drop rather than mislead.
+    if (WEEKDAY_RE.test(event.title) && !RECURRING_RE.test(event.title)) return false;
+    if (/\bthis week(?:end)?\b|\btoday\b|\btonight\b|\btomorrow\b/i.test(event.title)) return false;
+    const articleDate = articleDateFromUrl(event.url);
+    return !articleDate || articleDate.lastMs >= staleBeforeMs;
   });
   const dated = keep.filter((event) => event.startsAt)
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt) || a.id.localeCompare(b.id));
   const undated = keep.filter((event) => !event.startsAt)
     .sort((a, b) => b.fetchedAt.localeCompare(a.fetchedAt) || a.id.localeCompare(b.id));
-  // The same page often surfaces under several URLs (print views, tracking
-  // params, two different searches): one card per headline.
-  const seenTitles = new Set();
+  // The same event often surfaces under several URLs and under several
+  // headlines — print views, tracking params, two outlets covering one story
+  // ("Lahaina Town Cleanup…" vs "22nd Annual Lāhainā Town Cleanup…"). Compare
+  // titles with diacritics folded, ordinals/"annual" and "| Source" suffixes
+  // stripped; a title whose words are wholly contained in an earlier card's
+  // title is the same story. Earlier wins (dated-soonest, then freshest).
+  const keptTokens = [];
   return [...dated, ...undated].filter((event) => {
-    const key = event.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-    if (seenTitles.has(key)) return false;
-    seenTitles.add(key);
+    const tokens = titleTokens(event.title);
+    const key = tokens.join(' ');
+    const isDuplicate = keptTokens.some(({ key: keptKey, set: keptSet }) => {
+      if (key === keptKey) return true;
+      const [small, large] = tokens.length <= keptSet.size ? [tokens, keptSet] : [[...keptSet], new Set(tokens)];
+      return small.length >= 4 && small.every((token) => large.has(token));
+    });
+    if (isDuplicate) return false;
+    keptTokens.push({ key, set: new Set(tokens) });
     return true;
   });
 }

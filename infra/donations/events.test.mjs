@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  articleDateFromUrl,
   eventIdForUrl,
   expandQuery,
   extractEventDates,
+  isAggregatorPage,
   sortPublicEvents,
   toEventRecord,
   toPublicEvent,
@@ -112,6 +114,114 @@ test('extractEventDates reads common forms and resolves missing years forward', 
   assert.deepEqual(extractEventDates('Whale festival February 14', NOW), { startsAt: '2027-02-14' });
   // A date a few weeks back stays in the current year (event just happened).
   assert.deepEqual(extractEventDates('Recap: October 4 fair', NOW), { startsAt: '2026-10-04' });
+});
+
+test('extractEventDates resolves weekday words against the publication date', () => {
+  // The real shape that leaked into "Any day on Maui": a news blurb that only
+  // says "Saturday". Published Friday Oct 9 → Saturday Oct 10 (now past).
+  assert.deepEqual(
+    extractEventDates('22nd Annual Lāhainā Town Cleanup rescheduled for Saturday', NOW,
+      { publishedAt: '2026-10-09T18:00:00.000Z' }),
+    { startsAt: '2026-10-10' },
+  );
+  // Without a trusted publication date the weekday stays unresolved — crawl
+  // time would invent a future date for an old article.
+  assert.equal(extractEventDates('Cleanup rescheduled for Saturday', NOW), null);
+  // Recurring gatherings are not anchored to the article's news cycle.
+  assert.equal(
+    extractEventDates('Upcountry farmers market every Saturday', NOW, { publishedAt: '2026-10-09T00:00:00.000Z' }),
+    null,
+  );
+  assert.deepEqual(
+    extractEventDates('Reef talk tomorrow at the aquarium', NOW, { publishedAt: '2026-10-26T08:00:00.000Z' }),
+    { startsAt: '2026-10-27' },
+  );
+  assert.deepEqual(
+    extractEventDates('Keiki fishing derby this weekend', NOW, { publishedAt: '2026-10-26T08:00:00.000Z' }),
+    { startsAt: '2026-10-31', endsAt: '2026-11-01' },
+  );
+  // An explicit date still wins over the weekday word.
+  assert.deepEqual(
+    extractEventDates('Cleanup moved to Saturday, Oct. 10, from Sept. 26', NOW,
+      { publishedAt: '2026-10-09T00:00:00.000Z' }),
+    { startsAt: '2026-10-10' },
+  );
+});
+
+test('articleDateFromUrl reads news-article date paths', () => {
+  const day = articleDateFromUrl('https://mauinow.test/2026/10/09/22nd-annual-lahaina-town-cleanup/');
+  assert.equal(new Date(day.startMs).toISOString().slice(0, 10), '2026-10-09');
+  assert.equal(day.lastMs, day.startMs);
+  const month = articleDateFromUrl('https://mauinews.test/news/local-news/2026/10/cleanup-rescheduled/');
+  assert.equal(new Date(month.startMs).toISOString().slice(0, 10), '2026-10-01');
+  assert.equal(new Date(month.lastMs).toISOString().slice(0, 10), '2026-10-31');
+  assert.equal(articleDateFromUrl('https://x.test/photos/2026/13/bad-month/'), null);
+  assert.equal(articleDateFromUrl('https://x.test/volunteer'), null);
+});
+
+test('isAggregatorPage flags calendars, guides and listing pages, not single events', () => {
+  // Pages about events, not events.
+  assert.ok(isAggregatorPage('Maui Events Calendar', 'https://mauinow.test/calendar/'));
+  assert.ok(isAggregatorPage('Calendar • Maui County', 'https://mauicounty.test/calendar.aspx'));
+  assert.ok(isAggregatorPage('Maui Events November 2026: festivals, concerts and more', 'https://blog.test/post'));
+  assert.ok(isAggregatorPage('Things to do on Maui this fall', 'https://news.test/story'));
+  assert.ok(isAggregatorPage('Upcoming events', 'https://venue.test/about'));
+  assert.ok(isAggregatorPage('MACC happenings', 'https://macc.test/events/'));
+  // Single events survive, including event pages under a listing path.
+  assert.ok(!isAggregatorPage('Made in Maui County Festival', 'https://festival.test/schedule'));
+  assert.ok(!isAggregatorPage('Earth Wind & Fire at the MACC', 'https://macc.test/events/earth-wind-and-fire'));
+  assert.ok(!isAggregatorPage('Community cleanup', 'https://mauicounty.test/calendar.aspx?EID=12345'));
+  assert.ok(!isAggregatorPage('Volunteer with the watershed crew', 'https://kealani.test/volunteer'));
+});
+
+test('toEventRecord and toPublicEvent drop aggregator pages, retroactively too', () => {
+  const source = { sourceId: 's', causeTags: ['events'], urgency: 2 };
+  assert.equal(toEventRecord({
+    title: 'Maui Events November 2026', url: 'https://blog.test/maui-events',
+    highlight: 'All the festivals this month.',
+  }, source, NOW), null);
+  // A record stored before the filter existed stops being served.
+  const stored = {
+    ...toEventRecord({
+      title: 'Harvest festival December 5', url: 'https://farm.test/harvest', highlight: 'Music and food.',
+    }, source, NOW),
+    entityId: eventIdForUrl('https://farm.test/harvest'),
+  };
+  assert.ok(toPublicEvent(stored));
+  assert.equal(toPublicEvent({ ...stored, title: 'Maui events calendar' }), null);
+});
+
+test('sortPublicEvents drops undated cards that are stale news, keeps evergreen finds', () => {
+  const base = {
+    summary: 's', source: 'x', causeTags: ['events'], urgency: 2,
+    fetchedAt: '2026-10-27T00:00:00.000Z', startsAt: null, endsAt: null, domain: 'x.test',
+  };
+  const sorted = sortPublicEvents([
+    // Weekday-anchored headline the parser could not date: not "any day".
+    { ...base, id: 'evt-1', title: 'Cleanup rescheduled for Saturday', url: 'https://news.test/cleanup' },
+    // Article URL dated 18 days before now: stale coverage, not an invitation.
+    { ...base, id: 'evt-2', title: 'Keiki day at the aquarium', url: 'https://news.test/2026/10/09/keiki-day/' },
+    // Fresh article URL: stays.
+    { ...base, id: 'evt-3', title: 'New moonlight paddle series', url: 'https://news.test/2026/10/25/paddle/' },
+    // Evergreen volunteer page with no date anywhere: stays.
+    { ...base, id: 'evt-4', title: 'Volunteer with the watershed crew', url: 'https://crew.test/volunteer' },
+    // Recurring weekly gathering: "Saturdays" is not a news anchor.
+    { ...base, id: 'evt-5', title: 'Farmers market Saturdays in Pukalani', url: 'https://market.test/info' },
+  ], NOW);
+  assert.deepEqual(sorted.map((event) => event.id), ['evt-3', 'evt-4', 'evt-5']);
+});
+
+test('sortPublicEvents folds two outlets covering the same event into one card', () => {
+  const base = {
+    summary: 's', source: 'x', causeTags: ['events'], urgency: 2,
+    fetchedAt: '2026-10-27T00:00:00.000Z', domain: 'x.test',
+  };
+  const sorted = sortPublicEvents([
+    { ...base, id: 'evt-1', title: 'Lahaina Town Cleanup set for November 14', url: 'https://a.test/1', startsAt: '2026-11-14', endsAt: null },
+    { ...base, id: 'evt-2', title: '22nd Annual Lāhainā Town Cleanup set for November 14 | Maui Now', url: 'https://b.test/2', startsAt: '2026-11-14', endsAt: null },
+    { ...base, id: 'evt-3', title: 'Honokōwai reef day', url: 'https://c.test/3', startsAt: '2026-11-20', endsAt: null },
+  ], NOW);
+  assert.deepEqual(sorted.map((event) => event.id), ['evt-1', 'evt-3']);
 });
 
 test('extractEventDates stays conservative: idioms and junk produce no date', () => {
