@@ -167,6 +167,13 @@ test('isAggregatorPage flags calendars, guides and listing pages, not single eve
   assert.ok(isAggregatorPage('Things to do on Maui this fall', 'https://news.test/story'));
   assert.ok(isAggregatorPage('Upcoming events', 'https://venue.test/about'));
   assert.ok(isAggregatorPage('MACC happenings', 'https://macc.test/events/'));
+  // Live leaks from the first cleaned refresh: a news podcast episode and a
+  // news-site category archive are not attendable either.
+  assert.ok(isAggregatorPage(
+    'Oct. 26, 2026: Island flood threat - Hawaii Travel Daily',
+    'https://podcasts.apple.com/us/podcast/oct-26-2026-island-flood-threat/id123?i=456',
+  ));
+  assert.ok(isAggregatorPage('Maui Arts & Entertainment : Maui Now', 'https://mauinow.com/category/maui-arts-entertainment/'));
   // Single events survive, including event pages under a listing path.
   assert.ok(!isAggregatorPage('Made in Maui County Festival', 'https://festival.test/schedule'));
   assert.ok(!isAggregatorPage('Earth Wind & Fire at the MACC', 'https://macc.test/events/earth-wind-and-fire'));

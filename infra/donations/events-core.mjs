@@ -298,12 +298,22 @@ const AGGREGATOR_TITLE_RES = [
 // param ("calendar.aspx?EID=123") marks a specific event page instead.
 const AGGREGATOR_PATH_RE =
   /(?:^|\/)(?:events?|event-?calendar|events-?calendar|calendar(?:\.aspx)?|things-to-do|activities|whats-happening|annual-events)\/?$/i;
+// A news-site category/tag archive is a listing page wherever its path ends.
+const ARCHIVE_PATH_RE = /(?:^|\/)(?:category|categories|tag|tags|topics?)\//i;
 const EVENT_ID_QUERY_RE = /(?:^|[?&])(?:eid|event_?id|id)=\w*\d/i;
+// Podcast episodes and streams rank for "Maui events" searches but nobody can
+// attend a URL; same treatment as listing pages.
+const NON_ATTENDABLE_DOMAINS = new Set([
+  'podcasts.apple.com', 'music.apple.com', 'open.spotify.com',
+  'podcasts.google.com', 'audible.com', 'youtube.com', 'youtu.be',
+]);
 
 export function isAggregatorPage(title, url) {
   if (AGGREGATOR_TITLE_RES.some((re) => re.test(title))) return true;
   try {
     const parsed = new URL(url);
+    if (NON_ATTENDABLE_DOMAINS.has(parsed.hostname.replace(/^www\./, ''))) return true;
+    if (ARCHIVE_PATH_RE.test(parsed.pathname)) return true;
     return AGGREGATOR_PATH_RE.test(parsed.pathname) && !EVENT_ID_QUERY_RE.test(parsed.search);
   } catch {
     return false;
