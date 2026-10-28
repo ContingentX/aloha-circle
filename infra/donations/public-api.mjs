@@ -66,7 +66,7 @@ export function createDynamoPublicStore({
       ProjectionExpression:
         'PK, SK, entityId, #name, causeTags, needs, website, #status, verified, #source, ' +
         'title, summary, urgency, #action, #url, nonprofit, nonprofitId, fetchedAt, interests, causes, ' +
-        'town, localId, #local, verdict',
+        'town, localId, #local, verdict, ownerKey',
       ExpressionAttributeNames: {
         '#status': 'status', '#name': 'name', '#source': 'source', '#action': 'action',
         '#url': 'url', '#local': 'local',
@@ -263,7 +263,7 @@ const signupPublicId = (domain) =>
   `signup-${createHash('sha256').update(domain).digest('hex').slice(0, 16)}`;
 const result = (statusCode, body) => ({ statusCode, body });
 
-export function createPublicApi({ store }) {
+export function createPublicApi({ store, events = null }) {
   async function health() {
     return result(200, { ok: true, service: 'alohalive-api', counts: await store.counts() });
   }
@@ -361,6 +361,10 @@ export function createPublicApi({ store }) {
         error: 'no matchable causes found in those kiʻi memories yet — pick interests by hand',
       });
     }
+    // A visitor arriving from a "Happening on Maui" card carries the event id;
+    // locals who opted into that event outrank tag overlap alone.
+    const eventId = body.eventId == null ? null : opaqueId(body.eventId);
+    const eventOptInKeys = eventId && events ? await events.optInKeys(eventId) : null;
     const visitor = await store.put('VISITOR', {
       name,
       interests,
@@ -368,13 +372,16 @@ export function createPublicApi({ store }) {
       availability: optionalStr(body.availability, 80),
       groupType: optionalStr(body.groupType, 40),
       desiredInvolvement: optionalStr(body.desiredInvolvement, 80),
+      ...(eventId ? { eventId } : {}),
     }, { ttlDays: 30 });
-    const ranked = rankMatch(visitor, { locals, causes: causeRecords, endorsements });
-    const match = ranked ? await store.put('MATCH', ranked, { ttlDays: 30 }) : null;
+    const ranked = rankMatch(visitor, { locals, causes: causeRecords, endorsements, eventOptInKeys });
+    const match = ranked
+      ? await store.put('MATCH', { ...ranked, ...(eventId ? { eventId } : {}) }, { ttlDays: 30 })
+      : null;
     return result(201, { visitor, match, derivedInterests });
   }
 
-  async function createLocal(body) {
+  async function createLocal(body, clientKey) {
     const name = str(body.name, 80);
     const explicitInterests = tags(body.interests);
     const memories = memoryList(body.memories);
@@ -394,16 +401,23 @@ export function createPublicApi({ store }) {
         error: 'no matchable causes found in those kiʻi memories yet — pick interests by hand',
       });
     }
+    // When the join happens signed in, stamp the hashed identity so this
+    // LOCAL record can later be linked to the same account's event opt-ins.
+    const ownerKey = typeof clientKey === 'string' && /^[a-f0-9]{64}$/.test(clientKey)
+      ? clientKey
+      : null;
     const local = await store.put('LOCAL', {
       name,
       interests,
       causes: tags([...tags(body.causes), ...derivedInterests]),
       interestSource: memories.length ? 'kii-memories' : 'form',
       town: optionalStr(body.town, 80),
+      ...(ownerKey ? { ownerKey } : {}),
       status: 'pending',
       verified: false,
     }, { ttlDays: 180 });
-    return result(201, { ...local, derivedInterests });
+    const { ownerKey: _omitted, ...publicLocal } = local;
+    return result(201, { ...publicLocal, derivedInterests, linkedToAccount: Boolean(ownerKey) });
   }
 
   async function createNonprofit(body, clientKey) {

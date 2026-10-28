@@ -79,6 +79,7 @@ Resources:
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
                   - dynamodb:Scan
+                  - dynamodb:Query
                 Resource: !GetAtt DataTable.Arn
               - Effect: Allow
                 Action: s3:PutObject
@@ -102,7 +103,10 @@ Resources:
       Handler: index.handler
       Role: !GetAtt DonationsRole.Arn
       MemorySize: 256
-      Timeout: 15
+      # 30s leaves headroom for the scheduled events refresh (a few Octen
+      # searches at 12s client timeout each); API Gateway still caps HTTP
+      # requests at its own 30s integration limit.
+      Timeout: 30
       Environment:
         Variables:
           TABLE: !Ref DataTable
@@ -167,6 +171,28 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*"
+
+  # Happening on Maui: refresh the EVENT# records from the version-controlled
+  # Octen searches (infra/donations/events-sources.json) a few times a day.
+  # Needs SSM /alohalive/prod/OCTEN_API_KEY; without it the refresh is a no-op.
+  EventsRefreshRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: alohalive-events-refresh
+      ScheduleExpression: rate(6 hours)
+      State: ENABLED
+      Targets:
+        - Id: donations-events-refresh
+          Arn: !GetAtt DonationsFunction.Arn
+          Input: '{"eventsRefresh": true}'
+
+  EventsRefreshPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DonationsFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EventsRefreshRule.Arn
 
 Outputs:
   ApiEndpoint:

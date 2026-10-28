@@ -25,8 +25,13 @@ per-day/per-month caps, HST dates).
 Public data plane (what the www tabs call; `VITE_API_BASE_DEV/_PROD` repo
 variables point builds here): `GET /api/health`, `GET /api/nonprofits`
 (seeded/agent-written `NPO#` items merged with verified signed-up nonprofits),
-`GET /api/causes`, `POST /api/visitors {name, interests[]}` (runs the
-deterministic matcher, returns `{visitor, match}`), `POST /api/locals`,
+`GET /api/causes`, `GET /api/events` (the Happening on Maui plane: `EVENT#`
+records published by the scheduled Octen refresh — see
+`donations/events-sources.json` — sorted dated-upcoming first with
+locals-going counts), `POST /api/visitors {name, interests[], eventId?}` (runs
+the deterministic matcher, returns `{visitor, match}`; with `eventId`, locals
+opted into that event score higher), `POST /api/locals` (a valid bearer token
+riding along stamps a hashed `ownerKey` linking the record to its account),
 and `POST /api/endorsements {local, nonprofit, verdict}`. Anonymous community
 writes are pending/unverified and never affect
 trusted counts or matching. Item shapes are documented at the top of the
@@ -41,7 +46,10 @@ contract metadata on recognized legacy fixture rows. The Aloha agent updates
 the site by conditionally writing those same versioned DynamoDB items.
 Authed (`Authorization: Bearer <Firebase ID token>`): `GET /me`,
 `POST /profile`, `POST /npo/claim`, `POST /npo/send-code`,
-`POST /npo/verify-code`, `POST /local/submit`, `POST /local/confirm`
+`POST /npo/verify-code`, `POST /local/submit`, `POST /local/confirm`,
+`GET /local/optins` and `POST /local/optin {eventId, going}` (a local's
+"I'd take a visitor to this" event picks, stored as `OPTIN#` items under the
+user's partition with an event snapshot for the calendar view)
 (after the client's S3 upload succeeds), `POST /experiences`
 (verified nonprofits only), and `POST /api/nonprofits`. Nonprofit listing
 submissions are pending for at most 30 days and are atomically limited to one

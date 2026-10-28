@@ -1,0 +1,38 @@
+{
+  "note": "Version-controlled Octen search settings for the site's Happening on Maui events plane (see CLAUDE.md: edit settings here, never hardcode queries in code). Each entry mirrors the agentharness sources.json octen contract; the scheduled Lambda refresh publishes results as EVENT# records.",
+  "sources": [
+    {
+      "id": "octen-maui-happenings",
+      "name": "Maui events & festivals this month (live via Octen search)",
+      "enabled": true,
+      "octen": {
+        "query": "Maui events this month festival concert farmers market cultural celebration dates",
+        "count": 12,
+        "causeTags": ["events", "community", "culture"],
+        "urgency": 2
+      }
+    },
+    {
+      "id": "octen-maui-outdoors",
+      "name": "Maui outdoor & ocean gatherings (live via Octen search)",
+      "enabled": true,
+      "octen": {
+        "query": "Maui beach cleanup reef snorkel hike group event upcoming dates",
+        "count": 8,
+        "causeTags": ["ocean", "reef", "hiking", "community"],
+        "urgency": 3
+      }
+    },
+    {
+      "id": "octen-maui-volunteer-days",
+      "name": "Maui volunteer days & community workdays (live via Octen search)",
+      "enabled": true,
+      "octen": {
+        "query": "Maui volunteer day community workday tree planting food bank upcoming date",
+        "count": 8,
+        "causeTags": ["volunteer", "community", "farming"],
+        "urgency": 3
+      }
+    }
+  ]
+}

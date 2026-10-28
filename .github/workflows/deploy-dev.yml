@@ -33,6 +33,8 @@ jobs:
           bash -n infra/deploy.sh infra/deploy-web.sh infra/package-donations.sh infra/seed-demo-data.sh
           node --check infra/donations/index.mjs
           node --check infra/donations/public-api.mjs
+          node --check infra/donations/events.mjs
+          node --check infra/donations/events-core.mjs
           SEED_DRY_RUN=1 ./infra/seed-demo-data.sh
           package_dir="$(mktemp -d)"
           ./infra/package-donations.sh "$package_dir/donations.zip"

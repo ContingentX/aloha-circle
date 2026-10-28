@@ -32,6 +32,7 @@ Scraper configuration is version-controlled in `agentharness/src/sources.json` â
 - Octen credentials go in `agentharness/.env` as `OCTEN_API_KEY` (never committed). Without a key, octen sources fail closed to `needs_repair` and fixtures keep running.
 - The original Bright Data seam (hackathon sponsor integration: `src/brightdata.js`, the simulated adapter, and the loopback MCP bridge in `demo/`) is retired but kept in-tree; its example source is `enabled: false`.
 - CauseSignal shape: `{ source, url, title, causeTags[], urgency (1-5), summary, fetchedAt }`.
+- The site's **Happening on Maui** events plane has its own version-controlled Octen searches in `infra/donations/events-sources.json` (same spirit: edit queries there, never in code). A scheduled Lambda refresh publishes `EVENT#` records, `GET /api/events` serves them, and signed-in locals opt in via `POST /local/optin`. The key lives in SSM `/alohalive/prod/OCTEN_API_KEY`.
 
 ## Site media (/media)
 

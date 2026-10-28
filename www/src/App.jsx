@@ -7,6 +7,7 @@ import { LiveStrip, CauseScroller } from './Causes.jsx';
 import { World } from './World.jsx';
 import { AlohaCircle } from './AlohaCircle.jsx';
 import { KiiMatch, MatchCard } from './KiiMatch.jsx';
+import { HappeningOnMaui, LocalEventPlanner } from './Events.jsx';
 import { FEATURED_NONPROFITS } from './nonprofits.js';
 
 const TRUEFORGE_DEMO_ENABLED = import.meta.env.VITE_TRUEFORGE_DEMO === 'true';
@@ -17,9 +18,12 @@ const INTEREST_OPTIONS = [
 ];
 
 function InterestPicker({ selected, onToggle }) {
+  // Event-seeded tags can fall outside the stock chip set; render them too so
+  // a visitor can see and deselect everything that will drive their match.
+  const options = [...INTEREST_OPTIONS, ...selected.filter((tag) => !INTEREST_OPTIONS.includes(tag))];
   return (
     <div className="chips">
-      {INTEREST_OPTIONS.map((tag) => (
+      {options.map((tag) => (
         <button
           key={tag}
           type="button"
@@ -33,13 +37,23 @@ function InterestPicker({ selected, onToggle }) {
   );
 }
 
-function VisitorTab() {
+function VisitorTab({ seed = null, onClearSeed = null }) {
   const [name, setName] = useState('');
   const [interests, setInterests] = useState([]);
   const [match, setMatch] = useState(null);
   const [agent, setAgent] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+
+  // Arriving from a "Happening on Maui" card: the event's tags become the
+  // starting interests and the match request carries the event id, so locals
+  // already opted into that event rank first.
+  useEffect(() => {
+    if (!seed) return;
+    setInterests(seed.causeTags ?? []);
+    setMatch(null);
+    setError(null);
+  }, [seed?.id]);
 
   const toggle = (tag) =>
     setInterests((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
@@ -64,7 +78,7 @@ function VisitorTab() {
     try {
       const result = await api.post(
         TRUEFORGE_DEMO_ENABLED ? '/api/agent/runs' : '/api/visitors',
-        { name, interests },
+        { name, interests, ...(seed?.id ? { eventId: seed.id } : {}) },
       );
       if (!result.match) throw new Error('No eligible Maui match is available yet.');
       setMatch(result.match);
@@ -87,6 +101,14 @@ function VisitorTab() {
   return (
     <form className="card" onSubmit={submit}>
       <h3>What brought you to Maui?</h3>
+      {seed && (
+        <p className="event-seed" role="status">
+          🌺 Planning around <strong>{seed.title}</strong>
+          {onClearSeed && (
+            <button type="button" className="link-btn" onClick={onClearSeed}>✕ never mind</button>
+          )}
+        </p>
+      )}
       <input placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} required />
       <p className="hint">
         {TRUEFORGE_DEMO_ENABLED
@@ -164,6 +186,7 @@ function LocalTab() {
       ) : (
         <div className="card"><h3>Mahalo, {name}! Your local profile is pending verification.</h3></div>
       )}
+      <LocalEventPlanner />
       <div className="card">
         <h3>Is this helping Maui?</h3>
         <p className="hint">Verified locals are the trust layer — your calls power every match.</p>
@@ -333,7 +356,19 @@ function AccountSection({ onClose }) {
 
 export default function App() {
   const [view, setView] = useState('home'); // 'home' | 'account'
+  const [matchSeed, setMatchSeed] = useState(null);
   const wrapRef = useRef(null);
+
+  // "Go with a local" on an event card: seed the matcher with the event and
+  // bring the visitor up to the matching widget where the promise is kept.
+  const goWithLocal = (event) => {
+    setView('home');
+    setMatchSeed({ id: event.id, title: event.title, causeTags: event.causeTags });
+    requestAnimationFrame(() => {
+      document.getElementById('meet-maui')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
   return (
     <AuthProvider>
     <World />
@@ -364,8 +399,11 @@ export default function App() {
           <main>
             <DonationWheel />
             <KiiMatch />
-            <VisitorTab />
+            <div id="meet-maui">
+              <VisitorTab seed={matchSeed} onClearSeed={() => setMatchSeed(null)} />
+            </div>
           </main>
+          <HappeningOnMaui onGoWithLocal={goWithLocal} />
         </>
       )}
       <footer>
