@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import {
   eventIdForUrl,
+  expandQuery,
   sortPublicEvents,
   toEventRecord,
   toPublicEvent,
@@ -81,9 +82,11 @@ export function createEventsPlane({
     eventsInflight = scanPages({
       TableName: table,
       FilterExpression:
-        '(begins_with(PK, :event) AND SK = :meta) OR (begins_with(PK, :user) AND begins_with(SK, :optin))',
+        '(begins_with(PK, :event) AND SK = :meta) OR (begins_with(PK, :user) AND begins_with(SK, :optin)) OR ' +
+        '(begins_with(PK, :local) AND SK = :meta AND verified = :yes AND #status = :verified)',
       ExpressionAttributeValues: {
         ':event': 'EVENT#', ':meta': 'META', ':user': 'USER#', ':optin': 'OPTIN#',
+        ':local': 'LOCAL#', ':yes': true, ':verified': 'verified',
       },
       ProjectionExpression:
         'PK, SK, entityId, title, summary, #url, #source, causeTags, urgency, fetchedAt, ' +
@@ -93,6 +96,12 @@ export function createEventsPlane({
       const plane = {
         events: items.filter((item) => item.PK?.startsWith('EVENT#') && item.SK === 'META'),
         optIns: items.filter((item) => item.SK?.startsWith('OPTIN#') && item.going === true),
+        // Hashed identities of verified locals. Any signed-in account can opt
+        // in, but only these count toward the public "locals going" number.
+        verifiedLocalKeys: new Set(items
+          .filter((item) => item.PK?.startsWith('LOCAL#') && item.SK === 'META' &&
+            item.verified === true && item.status === 'verified' && typeof item.ownerKey === 'string')
+          .map((item) => item.ownerKey)),
       };
       eventsCache = plane;
       eventsCacheUntil = now().getTime() + cacheTtlMs;
@@ -116,7 +125,9 @@ export function createEventsPlane({
     const goingCounts = new Map();
     for (const optIn of plane.optIns) {
       const eventId = typeof optIn.eventId === 'string' ? optIn.eventId : '';
-      if (eventId) goingCounts.set(eventId, (goingCounts.get(eventId) ?? 0) + 1);
+      if (eventId && plane.verifiedLocalKeys.has(optIn.ownerKey)) {
+        goingCounts.set(eventId, (goingCounts.get(eventId) ?? 0) + 1);
+      }
     }
     const events = plane.events.map(toPublicEvent).filter(Boolean)
       .map((event) => ({ ...event, localsGoing: goingCounts.get(event.id) ?? 0 }));
@@ -203,7 +214,10 @@ export function createEventsPlane({
       prepared.push(source);
     }
     const searches = await Promise.allSettled(
-      prepared.map((source) => octenSearch(source.request, { apiKey, fetchImpl })),
+      prepared.map((source) => octenSearch(
+        { ...source.request, query: expandQuery(source.request.query, hawaiiNow()) },
+        { apiKey, fetchImpl },
+      )),
     );
     for (const [index, outcome] of searches.entries()) {
       const source = prepared[index];
